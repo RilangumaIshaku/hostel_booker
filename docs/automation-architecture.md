@@ -1,31 +1,33 @@
-# Playwright automation architecture
+# Multi-student automation architecture
 
-This is a design outline for later phases. It intentionally contains no portal selectors, accommodation identifiers, or active browser automation.
+This is the intended architecture. Only the dashboard and an early local sign-in prototype exist today. No hosted booking worker or multi-student account system has been implemented.
 
-## Proposed components
+## What runs where
 
-- **Browser session**: a local Playwright browser owned by the student. Authentication starts at the official FUTMINNA student portal and remains in that user-controlled session.
-- **Authentication monitor**: observes whether the student has reached an authenticated portal state. It does not read, record, or submit the student's password, and it pauses for CAPTCHA or any other security challenge.
-- **Availability reader**: added only after accommodation pages become available for inspection. It will use observed page structure and report unknown states as unknown rather than assuming a room is available.
-- **Preference matcher**: compares verified availability against Needs Assessment Hostel (NAH), Room of 2 first, then Room of 4. It must not substitute an unverified room identifier.
-- **Preference matcher**: the student's saved criteria provide standing authorization to select Needs Assessment Hostel, Room of 2 first, then Room of 4.
-- **Submission step**: submits the first clearly verified match automatically, without a second approval pause. If availability or the selection is ambiguous, it stops. It then waits for a clear portal confirmation; without one, the outcome is reported as unconfirmed.
-- **Payment handoff**: after the portal confirms the booking, the student completes the payment themselves.
+- **Vercel dashboard**: serves the web interface and each student's preferences and booking status.
+- **Application backend**: manages student accounts and securely hands each student's job to that student's isolated worker.
+- **Playwright worker**: runs a separate browser profile for each student, signs into the official FUTMINNA portal for that student, watches the observed accommodation flow, and performs the saved preference workflow.
+- **Per-student data store**: holds only the data needed to resume that student's session and job. Access is isolated by account and sensitive data is encrypted. Shared app configuration may use environment variables, but student portal passwords do not go in a shared `.env` file.
 
-## Control flow
+The current `portal:prepare` command is for development on one Windows PC. It prompts for one student's credentials in a local terminal and keeps that browser session on that PC. It is not invoked by the Vercel site and is not the multi-user worker.
 
-1. Student opens the official portal and completes sign-in and any security checks themselves.
-2. The assistant checks the visible authenticated state and, in a later phase, inspects accommodation availability.
-3. It identifies the first verified match in the saved preference order.
-4. Playwright submits the match automatically, once, without waiting for a second approval. If the result is unclear, it stops and does not resubmit.
-5. It reports success only after an explicit portal confirmation, then hands off to the student for payment.
+## Per-student workflow
 
-## Session and data handling
+1. Each student creates an app account and sets their own hostel preferences.
+2. Each student connects their own FUTMINNA account through an isolated browser session. The worker must never reuse one student's browser profile or credentials for another student.
+3. Before the opening time, the worker verifies that the student's portal session is still valid and ready.
+4. When accommodation becomes available, the worker uses only page controls and room identifiers it has actually observed. It matches Needs Assessment Hostel, Room of 2 first, then Room of 4.
+5. The student's saved preference is standing authorization for one matching booking submission. The worker stops if the page or result is ambiguous and never retries an uncertain submission.
+6. It reports success only after explicit confirmation from the portal. The student handles payment.
 
-- Do not put credentials or browser state in source control, telemetry, logs, shared services, or deployment configuration.
-- Keep automation local to the student's device unless a later design establishes an equally user-controlled session model.
-- Use the local `portal:prepare` launcher and a dedicated Playwright profile. Prompt for the portal username and masked password at runtime only when no signed-in session exists; do not save the password.
-- The dedicated browser profile contains session cookies and is sensitive local data. Keep it outside the repository and do not copy it to Vercel or GitHub.
-- Do not automate around CAPTCHA, MFA, access controls, rate limits, or portal errors.
-- Treat the student's saved preferences as standing authorization for one matching submission; never retry a submission if its outcome is uncertain.
-- Add Playwright and browser installation only when Phase 2 begins and the user approves dependency installation.
+## Credentials and session data
+
+- Never commit credentials, browser profiles, session cookies, or secret keys to GitHub.
+- A shared `.env` file is for app-level configuration such as database connections or encryption-service access. It cannot represent different student logins safely.
+- Student accounts and portal sessions must be isolated per user, with strict access controls and encryption in transit and at rest.
+- Prefer short-lived session tokens over retaining raw passwords. If the portal requires a password again, request it directly from that student through a protected flow and do not log it.
+- Pause for CAPTCHA or other portal security checks. Do not bypass access controls, rate limits, or portal errors.
+
+## Deployment boundary
+
+Vercel hosts the dashboard. A separate managed worker service must run Playwright with the browser dependencies, durable per-student session storage, job scheduling, and monitoring. The worker service, app authentication, secure credential/session handling, and observed accommodation flow are all future work. Until those pieces exist, deployment means dashboard hosting only; it does not enable automatic booking.
