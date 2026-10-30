@@ -1,0 +1,75 @@
+name: FUTMINNA Hostel Booker worker
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Nov 6, 2026, 06:55 UTC = 07:55 in Lagos. Start well before the 09:00 opening.
+    - cron: "55 6 6 11 *"
+    # Cover the rest of the day with additional bounded runs.
+    - cron: "55 13 6 11 *"
+    - cron: "55 19 6 11 *"
+
+permissions:
+  contents: read
+
+jobs:
+  worker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      PORTAL_DATA_ENCRYPTION_KEY: ${{ secrets.PORTAL_DATA_ENCRYPTION_KEY }}
+      WORKER_ID: github-actions-${{ github.run_id }}
+      WORKER_IDLE_POLL_MS: "60000"
+      WORKER_RUSH_POLL_MS: "1000"
+      WORKER_MAX_RUNTIME_MS: "21540000"
+      SESSION_CHECK_ENABLED: "true"
+      PORTAL_BOOKING_FLOW_VERIFIED: "false"
+      BOOKING_AUTOMATION_ENABLED: "false"
+    steps:
+      - name: Limit scheduled runs to the 2026 opening date
+        id: date
+        shell: bash
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "schedule" && "$(date -u +%F)" != "2026-11-06" ]]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "Worker skipped: scheduled window is only for November 6, 2026."
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check deployment secrets
+        id: config
+        if: steps.date.outputs.run == 'true'
+        shell: bash
+        run: |
+          if [[ -n "$SUPABASE_URL" && -n "$SUPABASE_SERVICE_ROLE_KEY" && -n "$PORTAL_DATA_ENCRYPTION_KEY" ]]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "Worker skipped: configure SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, and PORTAL_DATA_ENCRYPTION_KEY as repository Actions secrets."
+          fi
+
+      - name: Check out source
+        if: steps.config.outputs.ready == 'true'
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        if: steps.config.outputs.ready == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install project dependencies
+        if: steps.config.outputs.ready == 'true'
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        if: steps.config.outputs.ready == 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: Run bounded worker
+        if: steps.config.outputs.ready == 'true'
+        run: npm run worker:start

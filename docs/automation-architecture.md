@@ -6,7 +6,7 @@ This is the intended architecture. The dashboard, Supabase account/credential en
 
 - **Vercel dashboard**: serves the web interface and each student's preferences and booking status.
 - **Application backend**: manages student accounts and securely hands each student's job to that student's isolated worker.
-- **Playwright worker**: runs a separate in-memory browser context for each job, signs into the official FUTMINNA portal for that student, watches the observed accommodation flow, and performs the saved preference workflow.
+- **Playwright worker**: runs a separate in-memory browser context for each job, signs into the official FUTMINNA portal for that student, watches the observed accommodation flow, and performs the saved preference workflow. The repository has a paid always-on Render option and a free, bounded GitHub Actions option; scheduled GitHub runs may be delayed and do not provide a precise start guarantee.
 - **Per-student data store**: holds encrypted portal credentials and that student's job. Access is isolated by account. Shared app configuration may use environment variables, but student portal passwords do not go in a shared `.env` file.
 
 The current `portal:prepare` command is for development on one Windows PC. It prompts for one student's credentials in a local terminal and keeps that browser session on that PC. It is not invoked by the Vercel site and is not the multi-user worker. The hosted account form and encrypted credential endpoint are now in the code; they require a configured Supabase project before use.
@@ -30,4 +30,4 @@ The current `portal:prepare` command is for development on one Windows PC. It pr
 
 ## Deployment boundary
 
-Vercel hosts the dashboard. A separate managed worker service must run the Playwright container continuously with job scheduling and monitoring. The repo includes the worker scaffold and an encrypted per-user credential flow; Supabase configuration, cloud deployment, and the observed accommodation flow remain to be completed. Until the accommodation adapter is implemented and verified, deployment does not enable automatic booking.
+Vercel hosts the dashboard. The worker can run continuously on a paid managed service or in bounded GitHub Actions windows on the free plan. The GitHub workflow requires repository secrets and can be delayed by the hosted scheduler. The repo includes the worker scaffold and an encrypted per-user credential flow; Supabase configuration, worker secrets, and the observed accommodation flow remain to be completed. Until the accommodation adapter is implemented and verified, deployment does not enable automatic booking.

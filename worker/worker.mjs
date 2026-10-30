@@ -7,6 +7,7 @@ const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const workerId = process.env.WORKER_ID ?? `worker-${process.pid}`;
 const idlePollMs = Number(process.env.WORKER_IDLE_POLL_MS ?? 60_000);
 const rushPollMs = Number(process.env.WORKER_RUSH_POLL_MS ?? 1000);
+const maxRuntimeMs = Number(process.env.WORKER_MAX_RUNTIME_MS ?? 0);
 
 if (!supabaseUrl || !serviceKey || !process.env.PORTAL_DATA_ENCRYPTION_KEY) {
   throw new Error("Set SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, and PORTAL_DATA_ENCRYPTION_KEY before starting the worker.");
@@ -154,11 +155,13 @@ async function processJob(job) {
 
 async function main() {
   process.stdout.write(`FUTMINNA worker ${workerId} started.\n`);
+  const deadline = maxRuntimeMs > 0 ? Date.now() + maxRuntimeMs : Number.POSITIVE_INFINITY;
   for (;;) {
+    if (Date.now() >= deadline) break;
     const bookingEnabled = process.env.PORTAL_BOOKING_FLOW_VERIFIED === "true" && process.env.BOOKING_AUTOMATION_ENABLED === "true";
     const sessionCheckEnabled = process.env.SESSION_CHECK_ENABLED === "true";
     if (!bookingEnabled && !sessionCheckEnabled) {
-      await new Promise((resolve) => setTimeout(resolve, idlePollMs));
+      await new Promise((resolve) => setTimeout(resolve, Math.min(idlePollMs, Math.max(0, deadline - Date.now()))));
       continue;
     }
     try {
@@ -170,8 +173,9 @@ async function main() {
     let waitMs = idlePollMs;
     try { waitMs = await waitForNextJob(); }
     catch (error) { process.stderr.write(`Schedule lookup failed: ${error.message}\n`); }
-    await new Promise((resolve) => setTimeout(resolve, waitMs));
+    await new Promise((resolve) => setTimeout(resolve, Math.min(waitMs, Math.max(0, deadline - Date.now()))));
   }
+  process.stdout.write(`FUTMINNA worker ${workerId} reached its run limit and stopped.\n`);
 }
 
 main().catch((error) => {
