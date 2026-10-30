@@ -16,13 +16,14 @@ grant all on public.portal_connections to service_role;
 create table if not exists public.booking_jobs (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
+  run_mode text not null default 'booking',
   session text not null default '2026/2027',
   hostel_preference text not null default 'Needs Assessment Hostel',
   room_preferences text[] not null default array['Room of 2', 'Room of 4'],
   starts_at timestamptz not null,
   status text not null default 'armed' check (status in (
     'armed', 'running', 'needs_attention', 'booking_pending',
-    'confirmed', 'unconfirmed', 'cancelled', 'failed'
+    'confirmed', 'unconfirmed', 'cancelled', 'failed', 'session_checked'
   )),
   worker_id text,
   claimed_at timestamptz,
@@ -33,6 +34,14 @@ create table if not exists public.booking_jobs (
   updated_at timestamptz not null default now(),
   check (cardinality(room_preferences) between 1 and 2)
 );
+
+alter table public.booking_jobs add column if not exists run_mode text not null default 'booking';
+alter table public.booking_jobs drop constraint if exists booking_jobs_run_mode_check;
+alter table public.booking_jobs add constraint booking_jobs_run_mode_check
+  check (run_mode in ('booking', 'session_check'));
+alter table public.booking_jobs drop constraint if exists booking_jobs_status_check;
+alter table public.booking_jobs add constraint booking_jobs_status_check
+  check (status in ('armed', 'running', 'needs_attention', 'booking_pending', 'confirmed', 'unconfirmed', 'cancelled', 'failed', 'session_checked'));
 
 create index if not exists booking_jobs_due_idx
   on public.booking_jobs (starts_at, created_at)

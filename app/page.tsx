@@ -1,4 +1,5 @@
 import Link from "next/link";
+import DashboardStatus from "./dashboard-status";
 
 const preferences = [
   { rank: "01", name: "Room of 2", detail: "First choice", active: true },
@@ -102,6 +103,8 @@ export default function Dashboard() {
                 <p className="mt-1 text-xs text-slate-400">9:00 a.m. Lagos time · as you provided</p>
               </article>
             </div>
+
+            <DashboardStatus />
 
             <div className="mt-6 grid gap-6 xl:grid-cols-[1.45fr_0.85fr]">
               <article id="preferences" className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_2px_10px_rgba(15,23,42,0.025)]">

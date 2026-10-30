@@ -1,6 +1,6 @@
 # FUTMINNA Hostel Booker
 
-An independent student-facing hostel booking assistant for FUTMINNA. Phase 1 provides a responsive dashboard only. Portal authentication, availability detection, and booking are not connected.
+An independent student-facing hostel booking assistant for FUTMINNA. The responsive dashboard and early multi-student account/worker scaffold are present. Cloud account setup requires Supabase configuration; accommodation detection and booking are not implemented because the official portal has not exposed those controls.
 
 ## Booking behavior
 
@@ -25,7 +25,7 @@ The `npm run portal:prepare` command is an early local prototype. It opens Playw
 
 The cloud account flow uses Supabase Auth and Postgres. Create a Supabase project, apply `supabase/migrations/202610300001_booking_jobs.sql`, and set the variables from `.env.example` in the server deployment. Generate the encryption key with `npm run portal:keygen`; use the same key only in the server and worker secret settings. Never put the service role key or encryption key in browser code or GitHub.
 
-Deploy `worker/Dockerfile` as a continuously running worker with the same Supabase URL, service role key, and encryption key. The worker needs outbound access to the FUTMINNA portal. Booking creation remains disabled until the accommodation page is inspected and its verified flow is implemented.
+Deploy `worker/Dockerfile` as a continuously running worker with the same Supabase URL, service role key, and encryption key. The worker needs outbound access to the FUTMINNA portal. Set `SESSION_CHECK_ENABLED=true` to permit a sign-in-only dry run after the account and worker are configured. This verifies the saved login and stops without choosing a room. Booking creation remains disabled until `PORTAL_BOOKING_FLOW_VERIFIED=true` and `BOOKING_AUTOMATION_ENABLED=true` are set after the accommodation page and its actual room selection/submission flow have been implemented and verified. Do not set these booking flags merely to make the button available.
 
 ## Hosting and multiple students
 
@@ -50,4 +50,4 @@ Vercel serves the dashboard. The Playwright worker scaffold is designed to handl
 5. Testing, security, and reliability
 6. GitHub, Vercel dashboard deployment, and worker deployment
 
-The current Phase 1 dashboard does not connect to the portal. No accommodation page selectors or room identifiers are included because the booking interface is not available to inspect yet.
+The dashboard includes a live setup check, a sign-in-only dry-run control, and a booking schedule control. Dry runs require a connected student account and `SESSION_CHECK_ENABLED=true`. Booking remains disabled until the flow is implemented and verified. No accommodation page selectors or room identifiers are included because the booking interface is not available to inspect yet.

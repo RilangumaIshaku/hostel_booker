@@ -10,11 +10,25 @@ export async function GET() {
     const userId = await getStudentId();
     if (!userId) return NextResponse.json({ error: "Sign in to continue." }, { status: 401 });
     const { url, serviceKey } = supabaseConfig();
-    const response = await fetch(`${url}/rest/v1/booking_jobs?user_id=eq.${userId}&select=id,session,hostel_preference,room_preferences,starts_at,status,result_code,result_message,created_at&order=created_at.desc&limit=10`, {
+    const response = await fetch(`${url}/rest/v1/booking_jobs?user_id=eq.${userId}&select=id,run_mode,session,hostel_preference,room_preferences,starts_at,status,result_code,result_message,created_at&order=created_at.desc&limit=10`, {
       headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` }, cache: "no-store",
     });
     if (!response.ok) throw new Error();
-    return NextResponse.json({ jobs: await response.json() });
+    const connectionResponse = await fetch(`${url}/rest/v1/portal_connections?user_id=eq.${userId}&select=connected_at`, {
+      headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` }, cache: "no-store",
+    });
+    if (!connectionResponse.ok) throw new Error();
+    const connections = await connectionResponse.json();
+    const flowReady = process.env.PORTAL_BOOKING_FLOW_VERIFIED === "true";
+    const automationEnabled = process.env.BOOKING_AUTOMATION_ENABLED === "true";
+    return NextResponse.json({
+      jobs: await response.json(),
+      connected: connections.length > 0,
+      canSchedule: flowReady && automationEnabled && connections.length > 0,
+      sessionCheckEnabled: process.env.SESSION_CHECK_ENABLED === "true" && connections.length > 0,
+      flowReady,
+      automationEnabled,
+    });
   } catch {
     return NextResponse.json({ error: "Could not load booking jobs." }, { status: 503 });
   }
@@ -23,12 +37,15 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   const userId = await getStudentId().catch(() => null);
   if (!userId) return NextResponse.json({ error: "Sign in to continue." }, { status: 401 });
-  if (process.env.BOOKING_AUTOMATION_ENABLED !== "true") {
-    return NextResponse.json({ error: "Booking is not enabled until the accommodation page and selection flow have been verified." }, { status: 409 });
-  }
-
   try {
     const body = await request.json();
+    const runMode = body.runMode === "session_check" ? "session_check" : "booking";
+    if (runMode === "booking" && (process.env.PORTAL_BOOKING_FLOW_VERIFIED !== "true" || process.env.BOOKING_AUTOMATION_ENABLED !== "true")) {
+      return NextResponse.json({ error: "Booking is not enabled until the accommodation page and selection flow have been verified." }, { status: 409 });
+    }
+    if (runMode === "session_check" && process.env.SESSION_CHECK_ENABLED !== "true") {
+      return NextResponse.json({ error: "Portal sign-in checks are not enabled on this service." }, { status: 409 });
+    }
     const startsAt = typeof body.startsAt === "string" ? new Date(body.startsAt) : new Date(Number.NaN);
     if (!Number.isFinite(startsAt.getTime()) || startsAt.getTime() <= Date.now()) {
       return NextResponse.json({ error: "Choose a future booking start time." }, { status: 400 });
@@ -43,7 +60,7 @@ export async function POST(request: NextRequest) {
     const response = await fetch(`${url}/rest/v1/booking_jobs`, {
       method: "POST",
       headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}`, "Content-Type": "application/json", Prefer: "return=representation" },
-      body: JSON.stringify({ user_id: userId, session: "2026/2027", hostel_preference: hostel, room_preferences: roomOrder, starts_at: startsAt.toISOString() }),
+      body: JSON.stringify({ user_id: userId, run_mode: runMode, session: "2026/2027", hostel_preference: hostel, room_preferences: roomOrder, starts_at: startsAt.toISOString() }),
       cache: "no-store",
     });
     if (!response.ok) throw new Error();

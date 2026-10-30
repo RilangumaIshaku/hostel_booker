@@ -93,7 +93,12 @@ async function preparePortalSession(job) {
       await userField.fill(username);
       await passField.fill(password);
       await page.getByRole("button", { name: "Login", exact: true }).click();
-      await welcome.waitFor({ state: "visible", timeout: 60_000 });
+      const challenge = page.getByText(/captcha|recaptcha|verify you are human|security check/i).filter({ visible: true });
+      const result = await Promise.race([
+        welcome.waitFor({ state: "visible", timeout: 60_000 }).then(() => "ready"),
+        challenge.waitFor({ state: "visible", timeout: 60_000 }).then(() => "challenge"),
+      ]);
+      if (result === "challenge") throw new Error("PORTAL_SECURITY_CHALLENGE");
     }
 
     // The accommodation page and its controls are not currently inspectable.
@@ -106,12 +111,25 @@ async function preparePortalSession(job) {
 }
 
 async function processJob(job) {
-  try {
-    const resultCode = await preparePortalSession(job);
+  if (job.run_mode !== "session_check" && (process.env.PORTAL_BOOKING_FLOW_VERIFIED !== "true" || process.env.BOOKING_AUTOMATION_ENABLED !== "true")) {
     await updateJob(job.id, {
       status: "needs_attention",
+      result_code: "booking_flow_not_enabled",
+      result_message: "The booking flow is not verified. No portal sign-in or booking was attempted.",
+      last_checked_at: new Date().toISOString(),
+    });
+    return;
+  }
+
+  try {
+    const resultCode = await preparePortalSession(job);
+    const sessionOnly = job.run_mode === "session_check";
+    await updateJob(job.id, {
+      status: sessionOnly ? "session_checked" : "needs_attention",
       result_code: resultCode,
-      result_message: "Portal sign-in was checked. Accommodation controls have not been verified, so no room was selected or submitted.",
+      result_message: sessionOnly
+        ? "Portal sign-in was confirmed. This was a sign-in-only dry run; no room was selected or submitted."
+        : "Portal sign-in was checked. Accommodation controls have not been verified, so no room was selected or submitted.",
       last_checked_at: new Date().toISOString(),
     });
   } catch (error) {
@@ -119,11 +137,15 @@ async function processJob(job) {
       ? "portal_connection_missing"
       : error.message === "PORTAL_LOGIN_LAYOUT_CHANGED"
         ? "portal_login_layout_changed"
+        : error.message === "PORTAL_SECURITY_CHALLENGE"
+          ? "portal_security_challenge"
         : "portal_session_check_failed";
     await updateJob(job.id, {
       status: "needs_attention",
       result_code: code,
-      result_message: "The worker could not confirm a ready portal session. No booking was submitted.",
+      result_message: code === "portal_security_challenge"
+        ? "The portal requested a security check. Complete it manually; the worker stopped and did not try to bypass it."
+        : "The worker could not confirm a ready portal session. No booking was submitted.",
       last_checked_at: new Date().toISOString(),
     });
     process.stderr.write(`Job ${job.id}: ${code}\n`);
@@ -133,7 +155,9 @@ async function processJob(job) {
 async function main() {
   process.stdout.write(`FUTMINNA worker ${workerId} started.\n`);
   for (;;) {
-    if (process.env.BOOKING_AUTOMATION_ENABLED !== "true") {
+    const bookingEnabled = process.env.PORTAL_BOOKING_FLOW_VERIFIED === "true" && process.env.BOOKING_AUTOMATION_ENABLED === "true";
+    const sessionCheckEnabled = process.env.SESSION_CHECK_ENABLED === "true";
+    if (!bookingEnabled && !sessionCheckEnabled) {
       await new Promise((resolve) => setTimeout(resolve, idlePollMs));
       continue;
     }
