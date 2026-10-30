@@ -1,7 +1,9 @@
 node_modules/
 .next/
+.vercel/
 out/
 build/
+*.tsbuildinfo
 .env*
 !.env.example
 playwright-report/

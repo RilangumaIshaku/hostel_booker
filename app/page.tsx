@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 const preferences = [
   { rank: "01", name: "Room of 2", detail: "First choice", active: true },
   { rank: "02", name: "Room of 4", detail: "Fallback option", active: false },
@@ -57,7 +59,7 @@ export default function Dashboard() {
           <div className="mt-auto rounded-2xl bg-[#f5f7f4] p-4">
             <div className="flex size-9 items-center justify-center rounded-full bg-white text-emerald-800"><Icon name="help" /></div>
             <p className="mt-4 text-sm font-semibold">Need a hand?</p>
-            <p className="mt-1 text-xs leading-5 text-slate-500">Your booking stays under your control at every step.</p>
+            <p className="mt-1 text-xs leading-5 text-slate-500">The worker follows your saved room order and reports the portal result.</p>
             <a href="#security" className="mt-3 inline-flex items-center gap-2 text-xs font-semibold text-emerald-800">How it works <Icon name="arrow" className="size-3.5" /></a>
           </div>
           <p className="mt-5 px-1 text-[11px] text-slate-400">Student assistant · 2026/27</p>
@@ -120,15 +122,15 @@ export default function Dashboard() {
 
               <article id="security" className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_2px_10px_rgba(15,23,42,0.025)] sm:p-6">
                 <div className="flex size-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-800"><Icon name="shield" /></div>
-                <h2 className="mt-4 text-lg font-semibold tracking-tight">Ready when booking opens</h2>
-                <p className="mt-2 text-sm leading-6 text-slate-500">Once you sign in, the booker will use your saved room order and submit the first verified match automatically. Your password won’t be stored.</p>
+                <h2 className="mt-4 text-lg font-semibold tracking-tight">Prepare your portal account</h2>
+                <p className="mt-2 text-sm leading-6 text-slate-500">Your portal login is encrypted separately for your account. When the worker and the observed accommodation flow are ready, it will use your saved room order automatically.</p>
                 <div className="my-5 h-px bg-slate-100" />
                 <div className="space-y-3 text-xs leading-5 text-slate-600">
                   <div className="flex gap-2.5"><span className="mt-0.5 grid size-4 shrink-0 place-items-center rounded-full bg-emerald-100 text-emerald-800"><Icon name="check" className="size-3" /></span><p>It follows Needs Assessment Hostel, Room of 2 first, then Room of 4.</p></div>
                   <div className="flex gap-2.5"><span className="mt-0.5 grid size-4 shrink-0 place-items-center rounded-full bg-emerald-100 text-emerald-800"><Icon name="check" className="size-3" /></span><p>After a confirmed booking, you complete the payment.</p></div>
                 </div>
-                <button disabled className="mt-6 flex w-full cursor-not-allowed items-center justify-center gap-2 rounded-xl bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-400" title="Portal connection is not part of Phase 1">Portal connection coming later <Icon name="arrow" className="size-4" /></button>
-                <p className="mt-3 text-center text-[11px] text-slate-400">Portal connection is not active yet. No booking has been made.</p>
+                <Link href="/login" className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-900 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-800">Create account or connect <Icon name="arrow" className="size-4" /></Link>
+                <p className="mt-3 text-center text-[11px] text-slate-400">Portal connection requires the hosted account service to be configured. No booking has been made.</p>
               </article>
             </div>
 

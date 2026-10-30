@@ -1,15 +1,15 @@
 # Multi-student automation architecture
 
-This is the intended architecture. Only the dashboard and an early local sign-in prototype exist today. No hosted booking worker or multi-student account system has been implemented.
+This is the intended architecture. The dashboard, Supabase account/credential endpoints, database migration, and worker scaffold exist in the repository. They are not connected to a Supabase project or deployed, and the accommodation booking flow is not implemented.
 
 ## What runs where
 
 - **Vercel dashboard**: serves the web interface and each student's preferences and booking status.
 - **Application backend**: manages student accounts and securely hands each student's job to that student's isolated worker.
-- **Playwright worker**: runs a separate browser profile for each student, signs into the official FUTMINNA portal for that student, watches the observed accommodation flow, and performs the saved preference workflow.
-- **Per-student data store**: holds only the data needed to resume that student's session and job. Access is isolated by account and sensitive data is encrypted. Shared app configuration may use environment variables, but student portal passwords do not go in a shared `.env` file.
+- **Playwright worker**: runs a separate in-memory browser context for each job, signs into the official FUTMINNA portal for that student, watches the observed accommodation flow, and performs the saved preference workflow.
+- **Per-student data store**: holds encrypted portal credentials and that student's job. Access is isolated by account. Shared app configuration may use environment variables, but student portal passwords do not go in a shared `.env` file.
 
-The current `portal:prepare` command is for development on one Windows PC. It prompts for one student's credentials in a local terminal and keeps that browser session on that PC. It is not invoked by the Vercel site and is not the multi-user worker.
+The current `portal:prepare` command is for development on one Windows PC. It prompts for one student's credentials in a local terminal and keeps that browser session on that PC. It is not invoked by the Vercel site and is not the multi-user worker. The hosted account form and encrypted credential endpoint are now in the code; they require a configured Supabase project before use.
 
 ## Per-student workflow
 
@@ -24,10 +24,10 @@ The current `portal:prepare` command is for development on one Windows PC. It pr
 
 - Never commit credentials, browser profiles, session cookies, or secret keys to GitHub.
 - A shared `.env` file is for app-level configuration such as database connections or encryption-service access. It cannot represent different student logins safely.
-- Student accounts and portal sessions must be isolated per user, with strict access controls and encryption in transit and at rest.
-- Prefer short-lived session tokens over retaining raw passwords. If the portal requires a password again, request it directly from that student through a protected flow and do not log it.
+- Student accounts and portal logins must be isolated per user, with strict access controls and encryption in transit and at rest. Browser cookies are kept in memory only and cleared when a job ends.
+- The current scaffold stores the portal username and password encrypted in Supabase so the unattended worker can sign in later. The student can remove them from the connection page. Never log plaintext credentials.
 - Pause for CAPTCHA or other portal security checks. Do not bypass access controls, rate limits, or portal errors.
 
 ## Deployment boundary
 
-Vercel hosts the dashboard. A separate managed worker service must run Playwright with the browser dependencies, durable per-student session storage, job scheduling, and monitoring. The worker service, app authentication, secure credential/session handling, and observed accommodation flow are all future work. Until those pieces exist, deployment means dashboard hosting only; it does not enable automatic booking.
+Vercel hosts the dashboard. A separate managed worker service must run the Playwright container continuously with job scheduling and monitoring. The repo includes the worker scaffold and an encrypted per-user credential flow; Supabase configuration, cloud deployment, and the observed accommodation flow remain to be completed. Until the accommodation adapter is implemented and verified, deployment does not enable automatic booking.
