@@ -1,0 +1,20 @@
+services:
+  - type: worker
+    name: futminna-hostel-booker-worker
+    runtime: docker
+    dockerfilePath: ./worker/Dockerfile
+    dockerContext: .
+    autoDeploy: true
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: PORTAL_DATA_ENCRYPTION_KEY
+        sync: false
+      - key: SESSION_CHECK_ENABLED
+        value: "false"
+      - key: PORTAL_BOOKING_FLOW_VERIFIED
+        value: "false"
+      - key: BOOKING_AUTOMATION_ENABLED
+        value: "false"
