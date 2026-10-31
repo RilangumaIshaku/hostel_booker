@@ -1,3 +1,13 @@
+## First Time? Start Here
+
+See **[docs/quick-start.md](docs/quick-start.md)** for the minimal steps to get running today.
+
+For the full testing walkthrough — including how to safely test with school fees before booking day, how to capture the accommodation page, and what to do if the network drops — see **[docs/testing-guide.md](docs/testing-guide.md)**.
+
+> **Nothing books unless you pass `--live`.** The fees check never pays. The dry run never clicks. The mock tests need no internet connection.
+
+---
+
 # FUTMINNA Hostel Booker
 
 An independent student-facing hostel booking assistant for FUTMINNA. It signs into the official student portal, waits for the accommodation page, picks the saved room order, submits one booking, and only reports success when the portal shows a confirmation.
