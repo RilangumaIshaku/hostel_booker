@@ -1,8 +1,16 @@
 # 🚀 NEW USER? READ THIS FIRST! 👇
 
-## **[📖 SIMPLE GUIDE - Click Here for Step-by-Step Instructions](SIMPLE-GUIDE.md)**
+## **Not a programmer? [→ START HERE ←](START-HERE.md)**
 
-**The SIMPLE-GUIDE.md has everything you need in plain English:**
+**The [START-HERE.md](START-HERE.md) guide assumes ZERO technical knowledge:**
+- ✅ Written for complete beginners
+- ✅ Every step explained like you're 5 years old
+- ✅ Copy-paste commands (no thinking required)
+- ✅ Gets you from nothing to working in 30 minutes
+
+## **Want more details? [→ SIMPLE GUIDE ←](SIMPLE-GUIDE.md)**
+
+**The [SIMPLE-GUIDE.md](SIMPLE-GUIDE.md) has comprehensive info:**
 - ✅ How to install (copy-paste commands)
 - ✅ How to test before booking day
 - ✅ How to run on booking day (ONE command)
