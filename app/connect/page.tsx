@@ -69,7 +69,7 @@ export default function ConnectPortalPage() {
         </form>}
         {checked && connected && <div className="mt-6 rounded-2xl bg-emerald-50 p-4">
           <p className="text-sm font-semibold text-emerald-900">Portal account connected</p>
-          <p className="mt-1 text-xs leading-5 text-emerald-800">This only saves your encrypted login. The cloud worker and observed accommodation booking flow still need to be deployed before any booking can run.</p>
+          <p className="mt-1 text-xs leading-5 text-emerald-800">This saves your encrypted login for the cloud worker. The local race-day runner uses its own browser profile instead and does not need this connection.</p>
           <button onClick={remove} disabled={busy} className="mt-4 rounded-lg border border-emerald-900/20 px-3 py-2 text-xs font-semibold text-emerald-900 disabled:opacity-60">Remove portal login</button>
         </div>}
         {message && <p role="status" className="mt-4 rounded-xl bg-slate-50 p-3 text-sm text-slate-700">{message}</p>}

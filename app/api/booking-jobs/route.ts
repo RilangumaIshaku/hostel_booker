@@ -19,14 +19,12 @@ export async function GET() {
     });
     if (!connectionResponse.ok) throw new Error();
     const connections = await connectionResponse.json();
-    const flowReady = process.env.PORTAL_BOOKING_FLOW_VERIFIED === "true";
     const automationEnabled = process.env.BOOKING_AUTOMATION_ENABLED === "true";
     return NextResponse.json({
       jobs: await response.json(),
       connected: connections.length > 0,
-      canSchedule: flowReady && automationEnabled && connections.length > 0,
+      canSchedule: automationEnabled && connections.length > 0,
       sessionCheckEnabled: process.env.SESSION_CHECK_ENABLED === "true" && connections.length > 0,
-      flowReady,
       automationEnabled,
     });
   } catch {
@@ -40,8 +38,8 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const runMode = body.runMode === "session_check" ? "session_check" : "booking";
-    if (runMode === "booking" && (process.env.PORTAL_BOOKING_FLOW_VERIFIED !== "true" || process.env.BOOKING_AUTOMATION_ENABLED !== "true")) {
-      return NextResponse.json({ error: "Booking is not enabled until the accommodation page and selection flow have been verified." }, { status: 409 });
+    if (runMode === "booking" && process.env.BOOKING_AUTOMATION_ENABLED !== "true") {
+      return NextResponse.json({ error: "Booking automation is switched off on the worker. Enable BOOKING_AUTOMATION_ENABLED after a successful fees check." }, { status: 409 });
     }
     if (runMode === "session_check" && process.env.SESSION_CHECK_ENABLED !== "true") {
       return NextResponse.json({ error: "Portal sign-in checks are not enabled on this service." }, { status: 409 });

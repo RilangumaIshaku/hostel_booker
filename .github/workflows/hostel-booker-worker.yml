@@ -20,13 +20,18 @@ jobs:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       PORTAL_DATA_ENCRYPTION_KEY: ${{ secrets.PORTAL_DATA_ENCRYPTION_KEY }}
+      # Captured page map from `npm run portal:record` or `npm run portal:discover`.
+      # It contains URLs and control names only, never credentials.
+      PORTAL_FLOW_SPEC: ${{ secrets.PORTAL_FLOW_SPEC }}
       WORKER_ID: github-actions-${{ github.run_id }}
       WORKER_IDLE_POLL_MS: "60000"
       WORKER_RUSH_POLL_MS: "1000"
       WORKER_MAX_RUNTIME_MS: "21540000"
+      PORTAL_CLAIM_LEAD_SECONDS: "150"
+      PORTAL_JOB_WINDOW_MINUTES: "10"
       SESSION_CHECK_ENABLED: "true"
-      PORTAL_BOOKING_FLOW_VERIFIED: "false"
-      BOOKING_AUTOMATION_ENABLED: "false"
+      # Arm live booking from repository Variables once the fees check has passed.
+      BOOKING_AUTOMATION_ENABLED: ${{ vars.BOOKING_AUTOMATION_ENABLED || 'false' }}
     steps:
       - name: Limit scheduled runs to the 2026 opening date
         id: date

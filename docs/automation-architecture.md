@@ -1,33 +1,51 @@
 # Multi-student automation architecture
 
-This is the intended architecture. The dashboard, Supabase account/credential endpoints, database migration, and worker scaffold exist in the repository. They are not connected to a Supabase project or deployed, and the accommodation booking flow is not implemented.
+The dashboard, Supabase account/credential endpoints, database migrations, Playwright engine and worker all exist. Cloud deployment still requires a Supabase project. The engine is tested against a local mock of the portal; the real accommodation page must be captured once by a signed-in student because it is not visible before login.
 
 ## What runs where
 
-- **Vercel dashboard**: serves the web interface and each student's preferences and booking status.
-- **Application backend**: manages student accounts and securely hands each student's job to that student's isolated worker.
-- **Playwright worker**: runs a separate in-memory browser context for each job, signs into the official FUTMINNA portal for that student, watches the observed accommodation flow, and performs the saved preference workflow. The repository has a paid always-on Render option and a free, bounded GitHub Actions option; scheduled GitHub runs may be delayed and do not provide a precise start guarantee.
-- **Per-student data store**: holds encrypted portal credentials and that student's job. Access is isolated by account. Shared app configuration may use environment variables, but student portal passwords do not go in a shared `.env` file.
+- **Vercel dashboard**: student accounts, preferences, encrypted portal connection and job status.
+- **Supabase**: Auth and Postgres; `portal_connections` holds one encrypted portal login per student, `booking_jobs` holds their scheduled job.
+- **Worker** (Render, GitHub Actions, or a laptop): a fresh in-memory browser context per job. It signs in with that student's encrypted credentials, pre-warms before the opening time, opens the real accommodation page, and submits at most one verified booking.
+- **Local race-day runner**: the same engine in a persistent browser profile on the student's own machine. This is the low-latency path for the actual rush.
 
-The current `portal:prepare` command is for development on one Windows PC. It prompts for one student's credentials in a local terminal and keeps that browser session on that PC. It is not invoked by the Vercel site and is not the multi-user worker. The hosted account form and encrypted credential endpoint are now in the code; they require a configured Supabase project before use.
+The `portal:prepare` command remains a single-student prototype. The `portal:login`, `portal:fees`, `portal:discover`, `portal:record` and `portal:book` commands are the supported local path.
 
 ## Per-student workflow
 
-1. Each student creates an app account and sets their own hostel preferences.
-2. Each student connects their own FUTMINNA account through an isolated browser session. The worker must never reuse one student's browser profile or credentials for another student.
-3. Before the opening time, the worker verifies that the student's portal session is still valid and ready.
-4. When accommodation becomes available, the worker uses only page controls and room identifiers it has actually observed. It matches Needs Assessment Hostel, Room of 2 first, then Room of 4.
-5. The student's saved preference is standing authorization for one matching booking submission. The worker stops if the page or result is ambiguous and never retries an uncertain submission.
-6. It reports success only after explicit confirmation from the portal. The student handles payment.
+1. The student creates an app account and saves hostel/room preferences.
+2. The student connects their own portal login, encrypted per user.
+3. The worker claims the job `PORTAL_CLAIM_LEAD_SECONDS` (default 150) before the opening time and signs in early.
+4. At the opening time it opens the accommodation section and scans the page. Only rows that contain both the saved room type and a Book/Select control are eligible.
+5. The first preference with an available control is used. The saved preference is standing authorization for one submission.
+6. Once a submit is attempted, the worker never retries it. If the result is ambiguous the job becomes `unconfirmed` and the student is told to check the portal.
+7. Success is reported only for an explicit portal confirmation. Payment is the student's action.
+
+## Captured page map
+
+The real accommodation URL and layout are learned, not guessed:
+
+- `npm run portal:record -- --label accommodation` opens a visible browser, waits for the student to open the real page, then captures links, headings, forms, dropdowns, room-like rows and a screenshot under `.portal/` (gitignored).
+- `npm run portal:discover` does a read-only crawl from the signed-in dashboard.
+- The page URL is merged into `.portal/portal-flow.json`; the worker also accepts the same JSON through `PORTAL_FLOW_SPEC` (or a path via `PORTAL_FLOW_SPEC_PATH`).
+- Captures redact emails and long numeric identifiers. They contain no passwords or cookies.
+
+## Failure handling
+
+- `502`/`503`/`504`, resets and timeouts retry with jittered exponential backoff.
+- Not-open and sold-out pages are polled until the job window closes; the worker does not invent a room.
+- A CAPTCHA or verification step stops the run.
+- A stale `running` job is marked `needs_attention` with `worker_interrupted` on worker startup. It is never re-armed automatically, because it may already have submitted.
+- The worker uses `BOOKING_AUTOMATION_ENABLED` as the live-booking switch; `SESSION_CHECK_ENABLED` permits sign-in-only checks.
 
 ## Credentials and session data
 
-- Never commit credentials, browser profiles, session cookies, or secret keys to GitHub.
-- A shared `.env` file is for app-level configuration such as database connections or encryption-service access. It cannot represent different student logins safely.
-- Student accounts and portal logins must be isolated per user, with strict access controls and encryption in transit and at rest. Browser cookies are kept in memory only and cleared when a job ends.
-- The current scaffold stores the portal username and password encrypted in Supabase so the unattended worker can sign in later. The student can remove them from the connection page. Never log plaintext credentials.
-- Pause for CAPTCHA or other portal security checks. Do not bypass access controls, rate limits, or portal errors.
+- Never commit credentials, browser profiles, cookies, captures or secret keys.
+- A shared `.env` is for app configuration. Student portal logins belong in the encrypted per-user table, not in the environment.
+- Browser cookies stay in memory and are discarded when the job ends.
+- The local runner keeps its session in a local browser profile; the password is typed into the portal, not stored by the runner.
+- Do not run the local runner and the cloud worker for the same student concurrently.
 
 ## Deployment boundary
 
-Vercel hosts the dashboard. The worker can run continuously on a paid managed service or in bounded GitHub Actions windows on the free plan. The GitHub workflow requires repository secrets and can be delayed by the hosted scheduler. The repo includes the worker scaffold and an encrypted per-user credential flow; Supabase configuration, worker secrets, and the observed accommodation flow remain to be completed. Until the accommodation adapter is implemented and verified, deployment does not enable automatic booking.
+Vercel hosts the dashboard. The worker can run continuously on a paid managed service or in bounded GitHub Actions windows on the free plan. Scheduled runs can be delayed, so the local runner is the primary race-day path. Until the real accommodation page has been captured and a dry run reviewed, keep `BOOKING_AUTOMATION_ENABLED=false`.

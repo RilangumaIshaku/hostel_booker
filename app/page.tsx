@@ -106,6 +106,31 @@ export default function Dashboard() {
 
             <DashboardStatus />
 
+            <article className="mt-6 overflow-hidden rounded-2xl border border-slate-800 bg-[#10221b] text-white shadow-[0_2px_10px_rgba(15,23,42,0.06)]">
+              <div className="grid gap-0 lg:grid-cols-[1.15fr_1fr]">
+                <div className="p-5 sm:p-7">
+                  <p className="text-xs font-bold uppercase tracking-[0.12em] text-emerald-300">Race-day fast lane</p>
+                  <h2 className="mt-1.5 text-lg font-semibold tracking-tight">Run the booking from your own laptop</h2>
+                  <p className="mt-2 max-w-xl text-sm leading-6 text-emerald-50/70">A scheduled cloud worker can start late and reach the portal from another country. On the morning itself, the fastest and most reliable path is a local browser that is already signed in before 9:00 a.m.</p>
+                  <ol className="mt-5 space-y-3 text-sm leading-6 text-emerald-50/90">
+                    <li className="flex gap-3"><span className="grid size-6 shrink-0 place-items-center rounded-full bg-emerald-400/15 text-xs font-bold text-emerald-300">1</span><span>Run the free fees check. It proves sign-in, navigation and the real page controls, then stops at the payment page without paying.</span></li>
+                    <li className="flex gap-3"><span className="grid size-6 shrink-0 place-items-center rounded-full bg-emerald-400/15 text-xs font-bold text-emerald-300">2</span><span>If the hostel page is not found automatically, capture it once with the recorder and the runner reuses that page URL.</span></li>
+                    <li className="flex gap-3"><span className="grid size-6 shrink-0 place-items-center rounded-full bg-emerald-400/15 text-xs font-bold text-emerald-300">3</span><span>Start the timed run before the window. It pre-warms the session, retries through 502/503s, and submits the first verified match.</span></li>
+                  </ol>
+                </div>
+                <div className="border-t border-white/10 bg-black/25 p-5 font-mono text-[12px] leading-7 text-emerald-100/90 sm:p-7 lg:border-l lg:border-t-0">
+                  <p className="text-emerald-400/70"># 1 · free end-to-end check (never pays)</p>
+                  <p>npm run portal:fees</p>
+                  <p className="mt-3 text-emerald-400/70"># 2 · only if the hostel link is missing</p>
+                  <p>npm run portal:record -- --label accommodation</p>
+                  <p className="mt-3 text-emerald-400/70"># 3 · race day (Lagos time)</p>
+                  <p>npm run portal:book -- --at 2026-11-06T09:00:00 --live</p>
+                  <p className="mt-3 text-emerald-400/70"># dry run: shows the match, clicks nothing</p>
+                  <p>npm run portal:book -- --now</p>
+                </div>
+              </div>
+            </article>
+
             <div className="mt-6 grid gap-6 xl:grid-cols-[1.45fr_0.85fr]">
               <article id="preferences" className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_2px_10px_rgba(15,23,42,0.025)]">
                 <div className="flex items-start justify-between border-b border-slate-100 px-5 py-5 sm:px-7">
@@ -126,14 +151,14 @@ export default function Dashboard() {
               <article id="security" className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_2px_10px_rgba(15,23,42,0.025)] sm:p-6">
                 <div className="flex size-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-800"><Icon name="shield" /></div>
                 <h2 className="mt-4 text-lg font-semibold tracking-tight">Prepare your portal account</h2>
-                <p className="mt-2 text-sm leading-6 text-slate-500">Your portal login is encrypted separately for your account. When the worker and the observed accommodation flow are ready, it will use your saved room order automatically.</p>
+                <p className="mt-2 text-sm leading-6 text-slate-500">Your portal login is encrypted separately for your account. The worker signs in, opens the real hostel page, and books only a room whose controls it can verify.</p>
                 <div className="my-5 h-px bg-slate-100" />
                 <div className="space-y-3 text-xs leading-5 text-slate-600">
                   <div className="flex gap-2.5"><span className="mt-0.5 grid size-4 shrink-0 place-items-center rounded-full bg-emerald-100 text-emerald-800"><Icon name="check" className="size-3" /></span><p>It follows Needs Assessment Hostel, Room of 2 first, then Room of 4.</p></div>
                   <div className="flex gap-2.5"><span className="mt-0.5 grid size-4 shrink-0 place-items-center rounded-full bg-emerald-100 text-emerald-800"><Icon name="check" className="size-3" /></span><p>After a confirmed booking, you complete the payment.</p></div>
                 </div>
                 <Link href="/login" className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-900 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-800">Create account or connect <Icon name="arrow" className="size-4" /></Link>
-                <p className="mt-3 text-center text-[11px] text-slate-400">Portal connection requires the hosted account service to be configured. No booking has been made.</p>
+                <p className="mt-3 text-center text-[11px] text-slate-400">The hosted connection needs Supabase. The local race-day runner works without it. No booking has been made.</p>
               </article>
             </div>
 

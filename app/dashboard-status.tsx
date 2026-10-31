@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 
 type Job = { id: string; run_mode: string; status: string; starts_at: string; result_message: string | null };
-type Readiness = { connected: boolean; canSchedule: boolean; sessionCheckEnabled: boolean; flowReady: boolean; automationEnabled: boolean; jobs: Job[] };
+type Readiness = { connected: boolean; canSchedule: boolean; sessionCheckEnabled: boolean; automationEnabled: boolean; jobs: Job[] };
 
 export default function DashboardStatus() {
   const [readiness, setReadiness] = useState<Readiness | null>(null);
@@ -74,9 +74,9 @@ export default function DashboardStatus() {
       {loading && <p className="mt-4 text-sm text-slate-500">Checking your account and booking service…</p>}
       {!loading && message && <div className="mt-4 rounded-xl bg-amber-50 p-4 text-sm leading-6 text-amber-900"><p>{message}</p>{message.startsWith("Sign in") && <Link href="/login" className="mt-2 inline-block font-semibold underline">Sign in or create your account</Link>}</div>}
       {!loading && readiness && <>
-        <div className="mt-4 grid gap-3 sm:grid-cols-3"><StatusItem label="Your account" value="Signed in" good /><StatusItem label="FUTMINNA login" value={readiness.connected ? "Connected" : "Not connected"} good={readiness.connected} /><StatusItem label="Booking flow" value={readiness.flowReady ? "Verified" : "Not available yet"} good={readiness.flowReady} /></div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-3"><StatusItem label="Your account" value="Signed in" good /><StatusItem label="FUTMINNA login" value={readiness.connected ? "Connected" : "Not connected"} good={readiness.connected} /><StatusItem label="Booking automation" value={readiness.automationEnabled ? "Armed" : "Off"} good={readiness.automationEnabled} /></div>
         {!readiness.connected && <Link href="/connect" className="mt-4 inline-block text-sm font-semibold text-emerald-900 underline">Connect your FUTMINNA account</Link>}
-        {!readiness.flowReady && <p className="mt-4 rounded-xl bg-slate-50 p-4 text-sm leading-6 text-slate-600">The official portal currently shows the student dashboard, but no accommodation page or room controls. A booking cannot be scheduled until those real controls are available and verified.</p>}
+        {!readiness.automationEnabled && <p className="mt-4 rounded-xl bg-slate-50 p-4 text-sm leading-6 text-slate-600">The cloud worker is not armed yet. Run the free school-fees check on your laptop first — it signs in, opens the fees page and reaches the payment handoff without paying. Then enable <code className="rounded bg-slate-200 px-1">BOOKING_AUTOMATION_ENABLED</code> on the worker.</p>}
         {latestJob && <p className="mt-4 rounded-xl bg-slate-50 p-4 text-sm leading-6 text-slate-700">Latest {latestJob.run_mode === "session_check" ? "sign-in check" : "booking job"}: <strong>{latestJob.status.replaceAll("_", " ")}</strong> · {new Date(latestJob.starts_at).toLocaleString("en-NG", { dateStyle: "medium", timeStyle: "short", timeZone: "Africa/Lagos" })}{latestJob.result_message ? ` · ${latestJob.result_message}` : ""}</p>}
         {readiness.connected && <button onClick={() => void schedule("session_check")} disabled={!readiness.sessionCheckEnabled || busy} className="mt-5 w-full rounded-xl border border-emerald-900 px-4 py-3 text-sm font-semibold text-emerald-900 disabled:cursor-not-allowed disabled:border-slate-300 disabled:text-slate-400 sm:mr-3 sm:w-auto">{busy ? "Scheduling…" : "Run sign-in-only dry run"}</button>}
         <button onClick={() => void schedule("booking")} disabled={!readiness.canSchedule || busy} className="mt-3 w-full rounded-xl bg-emerald-900 px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300 sm:w-auto">{busy ? "Scheduling…" : "Schedule my booking attempt"}</button>

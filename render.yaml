@@ -12,9 +12,13 @@ services:
         sync: false
       - key: PORTAL_DATA_ENCRYPTION_KEY
         sync: false
+      - key: PORTAL_FLOW_SPEC
+        sync: false
+      - key: PORTAL_CLAIM_LEAD_SECONDS
+        value: "150"
+      - key: PORTAL_JOB_WINDOW_MINUTES
+        value: "10"
       - key: SESSION_CHECK_ENABLED
-        value: "false"
-      - key: PORTAL_BOOKING_FLOW_VERIFIED
         value: "false"
       - key: BOOKING_AUTOMATION_ENABLED
         value: "false"
