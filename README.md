@@ -1,10 +1,30 @@
-## First Time? Start Here
+# 🚀 NEW USER? READ THIS FIRST! 👇
 
-See **[docs/quick-start.md](docs/quick-start.md)** for the minimal steps to get running today.
+## **[📖 SIMPLE GUIDE - Click Here for Step-by-Step Instructions](SIMPLE-GUIDE.md)**
 
-For the full testing walkthrough — including how to safely test with school fees before booking day, how to capture the accommodation page, and what to do if the network drops — see **[docs/testing-guide.md](docs/testing-guide.md)**.
+**The SIMPLE-GUIDE.md has everything you need in plain English:**
+- ✅ How to install (copy-paste commands)
+- ✅ How to test before booking day
+- ✅ How to run on booking day (ONE command)
+- ✅ What to do if something goes wrong
+- ✅ Written for students, not programmers
 
-> **Nothing books unless you pass `--live`.** The fees check never pays. The dry run never clicks. The mock tests need no internet connection.
+**Other helpful guides:**
+- **[TEST-ME-FIRST.md](TEST-ME-FIRST.md)** - 15-minute quick test
+- **[RACE-DAY-CHECKLIST.md](RACE-DAY-CHECKLIST.md)** - Print this for booking day
+- **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - Fix any errors
+- **[docs/quick-start.md](docs/quick-start.md)** - Alternative quick start
+- **[docs/testing-guide.md](docs/testing-guide.md)** - Detailed testing guide
+
+> **Safety:** Nothing books unless you use `--live`. The fees check never pays. Dry runs never click. Mock tests need no internet.
+
+---
+
+## For Developers / Technical Users
+
+Below is the technical documentation. If you're not a developer, **[read the SIMPLE-GUIDE.md instead](SIMPLE-GUIDE.md)**.
+
+---
 
 ---
 
