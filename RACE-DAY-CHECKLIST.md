@@ -2,11 +2,11 @@
 
 ## Pre-Race (Do Days Before)
 
-- [ ] ✅ Tested on mock portal (`npm test` - all 17 tests passed)
+- [ ] ✅ Tested on mock portal (`npm test` - all 26 tests passed)
 - [ ] ✅ Tested fees payment flow (`npm run portal:fees` - reached gateway)
 - [ ] ✅ Captured accommodation page (`npm run portal:record`)
-- [ ] ✅ Dry run successful (`npm run portal:book -- --now --dry-run`)
-- [ ] ✅ Confirmed room preferences in `.env.local` (e.g., "Room of 2,Room of 4")
+- [ ] ✅ Chosen your hostel, boys or girls list (`npm run portal:select` or the dashboard picker)
+- [ ] ✅ Dry run successful (`npm run portal:book -- --now`)
 - [ ] ✅ Portal session saved (`npm run portal:login`)
 - [ ] ✅ Laptop fully charged or plugged in
 - [ ] ✅ Backup network ready (in case primary fails)
@@ -18,6 +18,10 @@
 - [ ] Connect to most stable network (campus/home WiFi > mobile data)
 - [ ] Test network speed (speedtest.net - need at least 2 Mbps)
 - [ ] Open PowerShell in project folder
+- [ ] Confirm the hostel you want is the saved choice:
+  ```powershell
+  npm run portal:select
+  ```
 - [ ] Run quick connectivity test:
   ```powershell
   npm run portal:login
@@ -108,11 +112,12 @@ If automation fails, have regular browser ready:
 ## Commands Quick Reference
 
 ```powershell
-# Login before race day
+# Choose your hostel, then log in (before race day)
+npm run portal:select
 npm run portal:login
 
 # Dry run (test - clicks nothing)
-npm run portal:book -- --now --dry-run
+npm run portal:book -- --now
 
 # Live booking (RACE DAY)
 npm run portal:book -- --at 2026-11-06T09:00:00 --live --headed
@@ -120,8 +125,8 @@ npm run portal:book -- --at 2026-11-06T09:00:00 --live --headed
 # Start 3 minutes early, try for 15 minutes
 npm run portal:book -- --at 2026-11-06T08:57:00 --live --window 15
 
-# Use different room preferences
-npm run portal:book -- --at 2026-11-06T09:00:00 --live --rooms "Room of 4,Room of 2"
+# Use a different hostel for one run
+npm run portal:book -- --at 2026-11-06T09:00:00 --live --gender female --hostel girls-bosso
 
 # Faster polling (checks every 500ms instead of 800ms)
 npm run portal:book -- --at 2026-11-06T09:00:00 --live --poll 500

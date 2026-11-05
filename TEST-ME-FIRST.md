@@ -16,7 +16,7 @@ npx playwright install chromium
 ```powershell
 npm test
 ```
-✅ Should see: "✔ tests passed" - All 17 tests green
+✅ Should see: "✔ tests passed" - All 26 tests green
 
 ### 3. Login to Real Portal (2 min)
 ```powershell

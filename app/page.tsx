@@ -1,10 +1,6 @@
 import Link from "next/link";
 import DashboardStatus from "./dashboard-status";
-
-const preferences = [
-  { rank: "01", name: "Room of 2", detail: "First choice", active: true },
-  { rank: "02", name: "Room of 4", detail: "Fallback option", active: false },
-];
+import HostelPicker from "./hostel-picker";
 
 function Icon({ name, className = "" }: { name: string; className?: string }) {
   const common = {
@@ -119,7 +115,9 @@ export default function Dashboard() {
                   </ol>
                 </div>
                 <div className="border-t border-white/10 bg-black/25 p-5 font-mono text-[12px] leading-7 text-emerald-100/90 sm:p-7 lg:border-l lg:border-t-0">
-                  <p className="text-emerald-400/70"># 1 · free end-to-end check (never pays)</p>
+                  <p className="text-emerald-400/70"># 0 · pick the hostel on this page, or here</p>
+                  <p>npm run portal:select</p>
+                  <p className="mt-3 text-emerald-400/70"># 1 · free end-to-end check (never pays)</p>
                   <p>npm run portal:fees</p>
                   <p className="mt-3 text-emerald-400/70"># 2 · only if the hostel link is missing</p>
                   <p>npm run portal:record -- --label accommodation</p>
@@ -133,19 +131,7 @@ export default function Dashboard() {
 
             <div className="mt-6 grid gap-6 xl:grid-cols-[1.45fr_0.85fr]">
               <article id="preferences" className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_2px_10px_rgba(15,23,42,0.025)]">
-                <div className="flex items-start justify-between border-b border-slate-100 px-5 py-5 sm:px-7">
-                  <div><p className="text-xs font-bold uppercase tracking-[0.12em] text-emerald-800">Your shortlist</p><h2 className="mt-1.5 text-lg font-semibold tracking-tight">Hostel preferences</h2></div>
-                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-500">2 choices</span>
-                </div>
-                <div className="px-5 sm:px-7">
-                  <div className="flex items-center justify-between py-4 text-xs font-medium text-slate-400"><span>HOSTEL</span><span>ROOM TYPE</span></div>
-                  <div className="flex items-center justify-between gap-3 border-t border-slate-100 py-5">
-                    <div className="flex min-w-0 items-center gap-3"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-emerald-50 text-emerald-800"><Icon name="bed" /></span><div className="min-w-0"><p className="truncate text-sm font-semibold">Needs Assessment Hostel</p><p className="mt-1 text-xs text-slate-400">Also known as NAH</p></div></div>
-                    <span className="shrink-0 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-900">Preferred</span>
-                  </div>
-                  {preferences.map((preference) => <div key={preference.rank} className="flex items-center justify-between gap-3 border-t border-slate-100 py-4"><div className="flex items-center gap-3"><span className={`grid size-8 place-items-center rounded-lg text-xs font-bold ${preference.active ? "bg-emerald-900 text-white" : "bg-slate-100 text-slate-500"}`}>{preference.rank}</span><div><p className="text-sm font-semibold">{preference.name}</p><p className="mt-0.5 text-xs text-slate-400">{preference.detail}</p></div></div><span className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-500">{preference.active ? "Priority" : "Fallback"}</span></div>)}
-                </div>
-                <div className="mx-5 mb-5 mt-1 rounded-xl bg-[#f7f8f6] px-4 py-3 sm:mx-7"><p className="text-xs leading-5 text-slate-500">We’ll check the official portal before recommending any room. Availability has not been verified yet.</p></div>
+                <HostelPicker />
               </article>
 
               <article id="security" className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_2px_10px_rgba(15,23,42,0.025)] sm:p-6">
@@ -154,7 +140,7 @@ export default function Dashboard() {
                 <p className="mt-2 text-sm leading-6 text-slate-500">Your portal login is encrypted separately for your account. The worker signs in, opens the real hostel page, and books only a room whose controls it can verify.</p>
                 <div className="my-5 h-px bg-slate-100" />
                 <div className="space-y-3 text-xs leading-5 text-slate-600">
-                  <div className="flex gap-2.5"><span className="mt-0.5 grid size-4 shrink-0 place-items-center rounded-full bg-emerald-100 text-emerald-800"><Icon name="check" className="size-3" /></span><p>It follows Needs Assessment Hostel, Room of 2 first, then Room of 4.</p></div>
+                  <div className="flex gap-2.5"><span className="mt-0.5 grid size-4 shrink-0 place-items-center rounded-full bg-emerald-100 text-emerald-800"><Icon name="check" className="size-3" /></span><p>It books only the hostel you chose, from the boys’ or the girls’ list — never both.</p></div>
                   <div className="flex gap-2.5"><span className="mt-0.5 grid size-4 shrink-0 place-items-center rounded-full bg-emerald-100 text-emerald-800"><Icon name="check" className="size-3" /></span><p>After a confirmed booking, you complete the payment.</p></div>
                 </div>
                 <Link href="/login" className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-900 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-800">Create account or connect <Icon name="arrow" className="size-4" /></Link>

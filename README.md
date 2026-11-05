@@ -46,11 +46,31 @@ The dashboard and the cloud account/worker scaffold remain. The important change
 
 The old worker signed in and then deliberately returned `PORTAL_SESSION_READY_ACCOMMODATION_FLOW_UNAVAILABLE`. It contained no room selection and no submission. The dashboard also refused to schedule a booking unless two flags were set, but setting those flags still would not have booked anything. That placeholder path has been replaced.
 
+## Choosing your hostel
+
+The dashboard lists the hostels the SUG published for 2026/2027, split into **Boys’ hostels** and **Girls’ hostels**. Pick the gender first, then the hostel; the price shown is the published one.
+
+| Boys’ hostel | Price | | Girls’ hostel | Price |
+| --- | --- | --- | --- | --- |
+| Block A & B | ₦60,000 | | Old Girls Hostel | ₦50,000 |
+| Bosso Boys Hostel | ₦50,000 | | Bosso Girls Hostel | ₦50,000 |
+| TETFund | ₦110,000 | | Shehu Aliyu | ₦60,000 |
+| Medical Hostel | ₦130,000 | | Mallam Ibrahim | ₦110,000 |
+| Needs Assessment (4-man) | ₦150,000 | | Medical Hostel | ₦130,000 |
+| Needs Assessment (2-man) | ₦180,000 | | Needs Assessment (4-man) | ₦150,000 |
+| | | | Needs Assessment (2-man) | ₦180,000 |
+
+**Boys’ and girls’ hostels are never mixed.** The catalogue ([lib/hostels.mjs](lib/hostels.mjs)) gives every hostel one gender, and the rule is enforced in four places: the picker only shows one list at a time, the preference API rejects a mismatched hostel, the worker refuses the job before it signs in, and the engine skips rows that name the other gender’s hostel. `Medical Hostel` and `Needs Assessment Hostel` exist on both lists, which is why they have separate ids (`boys-medical` / `girls-medical`).
+
+Hostels without a room split (Block A & B, Bosso, TETFund, Medical, Old Girls, Shehu Aliyu, Mallam Ibrahim) book **any bed space that names that hostel**. Needs Assessment carries its room type (`Room of 4` or `Room of 2`), so the risky guesswork is gone.
+
+The choice saves on the device immediately and to your account when one exists. `npm run portal:select` saves the same choice for the local runner in `.portal/selection.json`.
+
 ## What happens on race day
 
 1. The worker claims the job before the opening time and signs in early, so the session is warm.
 2. At the opening time it opens the real accommodation page and rescans it.
-3. It matches the saved hostel and room order (`Room of 2`, then `Room of 4`) only against rows that also contain a Book/Select control. It never clicks a page-level button that belongs to another room.
+3. It matches the chosen hostel (and its room type where the hostel has one) only against rows that also contain a Book/Select control. It never clicks a page-level button that belongs to another room, and never a row from the other gender’s hostels.
 4. If a row is open, it submits once. It never retries a submission whose result is unknown.
 5. It reports confirmation only when the portal itself says the room was allocated. Payment stays with the student.
 
@@ -63,7 +83,7 @@ npm install
 npm test
 ```
 
-The 17 tests launch real Chromium against a local mock of the portal. They prove:
+The 26 tests launch real Chromium against a local mock of the portal. They prove:
 
 - the first preference is booked when available;
 - it falls back to `Room of 4` when `Room of 2` is sold out;
@@ -78,6 +98,10 @@ The 17 tests launch real Chromium against a local mock of the portal. They prove
 A GitHub Actions or Render worker is useful for an account that must run while the phone is offline, but a scheduled run can start late and reaches the portal from another country. For the actual rush, run the booker on the laptop/network you will use.
 
 ```bash
+# 0. Choose the hostel once (boys or girls list). Saved under .portal/.
+#    The dashboard picker does the same thing with a nicer UI.
+npm run portal:select
+
 # 1. Sign in once in a visible browser. The password goes into the portal,
 #    not into this tool. The session is kept in a local browser profile.
 npm run portal:login
@@ -98,7 +122,7 @@ npm run portal:book -- --now
 npm run portal:book -- --at 2026-11-06T09:00:00 --live
 ```
 
-Options: `--headed` to watch the browser, `--poll 500` for a tighter loop, `--window 15` to keep trying for 15 minutes, `--rooms "Room of 2,Room of 4"`, `--profile <dir>`.
+Options: `--headed` to watch the browser, `--poll 500` for a tighter loop, `--window 15` to keep trying for 15 minutes, `--profile <dir>`, and `--gender male|female --hostel <id>` to override the saved choice for one run. `--rooms "Room of 2,Room of 4"` still forces a room order, but the chosen hostel decides it by default. A hostel from the other gender’s list is refused before the browser opens.
 
 For a fully unattended run, put `PORTAL_USERNAME` and `PORTAL_PASSWORD` in `.env.local` (already gitignored) so the runner can sign in again if the portal session expires. The CLI never prints them. Do not put these on a shared server.
 
@@ -121,15 +145,29 @@ The accommodation page appears only after a real student signs in, so its room t
 
 ## Cloud setup (optional)
 
-Supabase Auth/Postgres holds app accounts and one encrypted portal login per student. Vercel serves the dashboard. The worker runs on Render (paid) or in a bounded GitHub Actions window (free, best effort).
+Supabase Auth/Postgres holds app accounts, the chosen hostel and one encrypted portal login per student. Vercel serves the dashboard. The worker runs on Render (paid) or in a bounded GitHub Actions window (free, best effort).
 
-1. Create a Supabase project and apply both migrations:
+1. Create a project at [supabase.com](https://supabase.com) (free plan is enough).
+2. Open **SQL Editor** in that project and paste the three migration files in this order, running each one:
    - `supabase/migrations/202610300001_booking_jobs.sql`
    - `supabase/migrations/202610310001_booking_rush.sql` (early claim, so the session is pre-warmed)
-2. Set `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, and `PORTAL_DATA_ENCRYPTION_KEY` in Vercel. Generate the key with `npm run portal:keygen`; use the same key in the worker only. Never expose the service role key or encryption key to the browser.
-3. Deploy the worker with `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `PORTAL_DATA_ENCRYPTION_KEY`, and optionally `PORTAL_FLOW_SPEC` (the captured page map as JSON). Apply `render.yaml`, or add the three Supabase values as GitHub Actions secrets and set the repository variable `BOOKING_AUTOMATION_ENABLED=true` when you are ready for live booking.
-4. `SESSION_CHECK_ENABLED=true` allows a sign-in-only dry run. It is safe to leave on. `BOOKING_AUTOMATION_ENABLED` is the live switch; the API now refuses to schedule a booking when it is off.
-5. The worker claims a job 150 seconds early (`PORTAL_CLAIM_LEAD_SECONDS`) so it can sign in before 09:00. It keeps trying for `PORTAL_JOB_WINDOW_MINUTES` (default 10) after the opening time.
+   - `supabase/migrations/202611010001_hostel_choice.sql` (the chosen hostel and its gender)
+3. Open **Project Settings → API** and copy `Project URL`, `anon public` and `service_role`. `npm run portal:keygen` prints the encryption key.
+4. Put the four values in `.env.local` for local work and in Vercel → Settings → Environment Variables for the live dashboard:
+
+   ```
+   SUPABASE_URL=https://<project>.supabase.co
+   SUPABASE_ANON_KEY=<anon public key>
+   SUPABASE_SERVICE_ROLE_KEY=<service_role key>
+   PORTAL_DATA_ENCRYPTION_KEY=<output of npm run portal:keygen>
+   ```
+
+   The service role key and the encryption key must stay server-side. Use the **same** `PORTAL_DATA_ENCRYPTION_KEY` on the worker, or it cannot decrypt a portal login. Changing it invalidates the ones already saved.
+5. Deploy the worker with `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `PORTAL_DATA_ENCRYPTION_KEY`, and optionally `PORTAL_FLOW_SPEC` (the captured page map as JSON). Apply `render.yaml`, or add the three Supabase values as GitHub Actions secrets and set the repository variable `BOOKING_AUTOMATION_ENABLED=true` when you are ready for live booking.
+6. `SESSION_CHECK_ENABLED=true` allows a sign-in-only dry run. It is safe to leave on. `BOOKING_AUTOMATION_ENABLED` is the live switch; the API refuses to schedule a booking when it is off.
+7. The worker claims a job 150 seconds early (`PORTAL_CLAIM_LEAD_SECONDS`) so it can sign in before 09:00. It keeps trying for `PORTAL_JOB_WINDOW_MINUTES` (default 10) after the opening time.
+
+Until those values exist, the dashboard still works: the picker saves the choice on the device, and the local runner uses `.portal/selection.json`.
 
 If a worker dies mid-job, startup recovery marks the stale job `needs_attention` with `worker_interrupted`. It never re-arms a job that may already have submitted.
 
@@ -148,6 +186,7 @@ If a worker dies mid-job, startup recovery marks the stale job `needs_attention`
 | Command | What it does |
 | --- | --- |
 | `npm test` | Mock-portal browser tests and pure-logic tests |
+| `npm run portal:select` | Choose the hostel (boys/girls list) for the local runner |
 | `npm run portal:login` | Save a real portal session locally |
 | `npm run portal:fees` | Sign in, read fees, stop at the payment handoff |
 | `npm run portal:discover` | Read-only crawl of the signed-in portal |
@@ -162,8 +201,9 @@ If a worker dies mid-job, startup recovery marks the stale job `needs_attention`
 ## Status
 
 1. Dashboard and project setup — complete
-2. Booking engine, retries, confirmation detection — complete and tested against a mock portal
-3. Local race-day runner and recorder — complete
-4. Fees pipeline check — complete
-5. Real accommodation page capture — needs one run by a signed-in student
-6. Cloud deployment — needs Supabase, then Render/GitHub Actions and Vercel
+2. Hostel catalogue with gender separation, in-app picker and account storage — complete
+3. Booking engine, retries, confirmation detection — complete and tested against a mock portal
+4. Local race-day runner and recorder — complete
+5. Fees pipeline check — complete
+6. Real accommodation page capture — needs one run by a signed-in student
+7. Cloud deployment — needs Supabase, then Render/GitHub Actions and Vercel

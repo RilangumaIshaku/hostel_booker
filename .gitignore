@@ -10,3 +10,4 @@ playwright-report/
 test-results/
 .local-browser-profile/
 .portal/
+screenshots/

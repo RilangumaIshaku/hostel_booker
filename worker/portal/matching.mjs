@@ -1,5 +1,9 @@
 // Pure decision logic. Everything here is unit-testable without a browser.
 
+import { ANY_ROOM, exclusiveHostelNames } from "../../lib/hostels.mjs";
+
+export { ANY_ROOM };
+
 const NUMBER_WORDS = { 1: "one", 2: "two", 3: "three", 4: "four", 5: "five", 6: "six" };
 
 export function normalize(text) {
@@ -43,6 +47,27 @@ export function matchesHostel(text, hostel) {
   return words.every((word) => value.includes(word));
 }
 
+/**
+ * Strict name check used by the gender guard: the row must contain the whole
+ * hostel name, so "Bosso Girls Hostel" is never mistaken for "Old Girls
+ * Hostel" by a loose word match.
+ */
+export function namesHostel(text, hostelName) {
+  const value = normalize(text);
+  const cleaned = normalize(hostelName);
+  return Boolean(value && cleaned) && value.includes(cleaned);
+}
+
+/**
+ * True when the row names a hostel that exists only for the other gender.
+ * Rows that name no hostel are not blocked here; the booker still requires a
+ * hostel match before it books "any room type".
+ */
+export function crossesGender(text, gender) {
+  if (gender !== "male" && gender !== "female") return false;
+  return exclusiveHostelNames(gender).some((name) => namesHostel(text, name));
+}
+
 const SOLD_OUT_PATTERN = /sold\s*out|no\s+(?:more\s+)?(?:space|vacancy|vacancies|rooms?|bed)|fully\s+booked|fully\s+allocated|rooms?\s+(?:are\s+)?full|unavailable|closed|not\s+available/i;
 const NOT_OPEN_PATTERN = /not\s+(?:yet\s+)?(?:open|started|available|begun)|opening\s+(?:soon|on|at)|booking\s+(?:has\s+)?(?:not|yet)|will\s+open|portal\s+(?:is\s+)?closed|no\s+active\s+booking|come\s+back/i;
 const ACTION_PATTERN = /^(book|book\s*now|select|reserve|apply|allocate|choose|proceed|apply\s*now|make\s*booking|details)$/i;
@@ -69,7 +94,9 @@ export function isActionLabel(text) {
  * belongs to a different room.
  */
 export function chooseCandidate(candidates, preferences) {
-  for (const preference of preferences) {
+  // No room preference means "any bed space in the chosen hostel".
+  const order = preferences?.length ? preferences : [ANY_ROOM];
+  for (const preference of order) {
     const matching = candidates.filter((candidate) => candidate.available !== false && candidate.roomPreference === preference);
     if (matching.length > 0) {
       const sorted = [...matching].sort((a, b) => (b.hostelMatched === true) - (a.hostelMatched === true));

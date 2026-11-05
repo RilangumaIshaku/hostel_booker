@@ -11,6 +11,7 @@ import {
   normalize,
 } from "./matching.mjs";
 import { DeadlineExceededError } from "./retry.mjs";
+import { describePreference } from "../../lib/hostels.mjs";
 
 const MODAL_SELECTOR = '[role="dialog"], .modal, .swal2-popup, [class*="modal" i]';
 const CONFIRM_LABEL = /^(yes|confirm|ok|okay|proceed|continue|book|submit|allocate|reserve)$/i;
@@ -150,14 +151,15 @@ async function submitSelectRoute(page, plan, { deadline, dryRun }) {
 }
 
 /** Find and (optionally) submit one matching room. Never resubmits. */
-export async function bookRoom({ page, hostel, preferences, deadline = Number.POSITIVE_INFINITY, dryRun = false, onBeforeSubmit }) {
+export async function bookRoom({ page, hostel, hostelAliases = [], preferences = [], gender = null, deadline = Number.POSITIVE_INFINITY, dryRun = false, onBeforeSubmit }) {
   if (Date.now() >= deadline) throw new DeadlineExceededError();
+  if (!hostel) return { outcome: "needs_attention", reason: "hostel_not_chosen", submitted: false };
   const scan = await scanRows(page);
-  const candidates = toCandidates(scan, { hostel, preferences });
+  const candidates = toCandidates(scan, { hostel, hostelAliases, preferences, gender });
   const choice = chooseCandidate(candidates, preferences);
 
   if (!choice) {
-    const plan = planSelectRoute(scan, { hostel, preferences });
+    const plan = planSelectRoute(scan, { hostel, hostelAliases, preferences, gender });
     if (plan) return { ...(await submitSelectRoute(page, plan, { deadline, dryRun })), scan: scanSummary(scan, candidates) };
     const text = await bodyText(page);
     return {
@@ -173,6 +175,7 @@ export async function bookRoom({ page, hostel, preferences, deadline = Number.PO
     return {
       outcome: "would_book",
       preference: choice.preference,
+      preferenceLabel: describePreference(choice.preference),
       submitted: false,
       evidence: `Would click "${choice.candidate.action.text}" in row: ${redact(choice.candidate.rowText).slice(0, 300)}`,
       scan: scanSummary(scan, candidates),

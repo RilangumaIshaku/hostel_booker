@@ -6,9 +6,20 @@ import { join } from "node:path";
 import { MOCK_LOGIN, MOCK_PASSWORD, startMockPortal } from "./fixtures/mock-portal.mjs";
 import { login, openSection, openSession } from "../worker/portal/session.mjs";
 import { bookRoom, feesCheck } from "../worker/portal/booker.mjs";
+import { resolveBookingTarget } from "../lib/hostels.mjs";
 
 const HOSTEL = "Needs Assessment Hostel";
 const PREFERENCES = ["Room of 2", "Room of 4"];
+
+function targetFor(gender, hostelId) {
+  const target = resolveBookingTarget({ gender, hostelId });
+  return {
+    hostel: target.portalName,
+    hostelAliases: target.aliases,
+    preferences: target.rooms,
+    gender: target.gender,
+  };
+}
 
 async function withPortal(portalOptions, run) {
   const portal = await startMockPortal(portalOptions);
@@ -83,6 +94,37 @@ test("dry run reports the match without clicking submit", { timeout: 90_000 }, a
     assert.equal(result.preference, "Room of 2");
     assert.equal(result.submitted, false);
     assert.equal(portal.state.bookings.length, 0);
+  });
+});
+
+test("books the chosen girls' hostel from a page that lists both genders", { timeout: 90_000 }, async () => {
+  await withPortal({ mode: "mixed" }, async ({ portal, page }) => {
+    await openSection(page, { pattern: /hostel|accommodation/i, label: "hostel" });
+    const result = await bookRoom({ page, ...targetFor("female", "girls-bosso"), deadline: Date.now() + 45_000 });
+    assert.equal(result.outcome, "confirmed", JSON.stringify(result));
+    assert.deepEqual(portal.state.hostelBookings, [{ hostel: "Bosso Girls Hostel", room: "Room of 4" }]);
+    assert.equal(portal.state.requests.filter((entry) => entry === "POST /std/book.php").length, 1);
+  });
+});
+
+test("a girls' choice never falls back into a boys' hostel", { timeout: 90_000 }, async () => {
+  await withPortal({ mode: "mixedGirlsSoldOut" }, async ({ portal, page }) => {
+    await openSection(page, { pattern: /hostel|accommodation/i, label: "hostel" });
+    const result = await bookRoom({ page, ...targetFor("female", "girls-bosso"), deadline: Date.now() + 20_000 });
+    assert.equal(result.outcome, "not_available", JSON.stringify(result));
+    assert.equal(result.submitted, false);
+    assert.equal(portal.state.bookings.length, 0);
+    assert.deepEqual(portal.state.hostelBookings, []);
+  });
+});
+
+test("an any-room choice never books a different hostel", { timeout: 90_000 }, async () => {
+  await withPortal({ mode: "mixedBoysBlockSoldOut" }, async ({ portal, page }) => {
+    await openSection(page, { pattern: /hostel|accommodation/i, label: "hostel" });
+    const result = await bookRoom({ page, ...targetFor("male", "boys-block-a-b"), deadline: Date.now() + 20_000 });
+    assert.equal(result.outcome, "not_available", JSON.stringify(result));
+    assert.equal(portal.state.bookings.length, 0);
+    assert.deepEqual(portal.state.hostelBookings, []);
   });
 });
 

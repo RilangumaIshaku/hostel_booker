@@ -109,7 +109,7 @@ Run these tests to make sure everything works:
 ```bash
 npm test
 ```
-**What you should see:** "17 tests passed" in green
+**What you should see:** "26 tests passed" in green
 
 **If it fails:** Run `npx playwright install chromium` again
 
@@ -380,7 +380,7 @@ npm run portal:book -- --at 2026-11-06T09:00:00 --live --rooms "Room of 4,Room o
 
 ## 🎉 Success Rate
 
-**Mock Portal Tests:** 100% (17/17 tests pass)
+**Mock Portal Tests:** 100% (26/26 tests pass)
 
 **Real Portal:** Unknown until you test it
 

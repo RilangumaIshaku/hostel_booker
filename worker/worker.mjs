@@ -14,6 +14,7 @@ import { bookRoom } from "./portal/booker.mjs";
 import { readSpec, sectionUrl } from "./portal/spec.mjs";
 import { isTransient } from "./portal/retry.mjs";
 import { redact } from "./portal/inventory.mjs";
+import { describePreference, resolveBookingTarget } from "../lib/hostels.mjs";
 
 const portalUrl = process.env.PORTAL_URL || DEFAULT_PORTAL_URL;
 const supabaseUrl = process.env.SUPABASE_URL?.replace(/\/$/, "");
@@ -180,7 +181,7 @@ function terminalStatus(result) {
       return {
         status: "needs_attention",
         result_code: "dry_run_only",
-        result_message: `Found ${result.preference}, but the worker was in dry-run mode.`,
+        result_message: `Found ${describePreference(result.preference)}, but the worker was in dry-run mode.`,
       };
     default:
       return {
@@ -220,9 +221,30 @@ async function processSessionCheck(job) {
 }
 
 async function processBooking(job) {
+  // Resolve the saved choice before touching the portal. A hostel that belongs
+  // to the other gender stops the job here; nothing is signed in or clicked.
+  let target = null;
+  if (job.hostel_id) {
+    try {
+      target = resolveBookingTarget({ gender: job.gender, hostelId: job.hostel_id });
+    } catch (error) {
+      await updateJob(job.id, {
+        status: "needs_attention",
+        result_code: error.code ?? "invalid_hostel_choice",
+        result_message: error.message,
+        last_checked_at: new Date().toISOString(),
+      });
+      process.stderr.write(`Job ${job.id}: ${error.code ?? "invalid_hostel_choice"}\n`);
+      return;
+    }
+  }
+
   const startAt = new Date(job.starts_at).getTime();
   const until = Math.max(startAt + jobWindowMs, Date.now() + 60_000);
-  const preferences = Array.isArray(job.room_preferences) && job.room_preferences.length ? job.room_preferences : ["Room of 2", "Room of 4"];
+  const hostelName = target?.portalName ?? job.hostel_preference ?? "Needs Assessment Hostel";
+  const hostelAliases = target?.aliases ?? [];
+  const preferences = target ? target.rooms : (Array.isArray(job.room_preferences) ? job.room_preferences : []);
+  const gender = target?.gender ?? job.gender ?? null;
   const spec = readSpec();
   let accommodationUrl = sectionUrl(spec, "accommodation") ?? "";
   let session;
@@ -234,7 +256,7 @@ async function processBooking(job) {
   try {
     session = await openPortalSession(job);
     page = session.page;
-    process.stdout.write(`Job ${job.id}: signed in; waiting for ${new Date(startAt).toISOString()}.\n`);
+    process.stdout.write(`Job ${job.id}: signed in for ${hostelName}${gender ? ` (${gender})` : ""}; waiting for ${new Date(startAt).toISOString()}.\n`);
 
     if (Date.now() < startAt) await waitUntil(startAt, { chunkMs: 500 });
     process.stdout.write(`Job ${job.id}: booking window reached.\n`);
@@ -270,14 +292,16 @@ async function processBooking(job) {
 
         const result = await bookRoom({
           page,
-          hostel: job.hostel_preference || "Needs Assessment Hostel",
+          hostel: hostelName,
+          hostelAliases,
           preferences,
+          gender,
           deadline: until,
           onBeforeSubmit: async (info) => {
             await updateJob(job.id, {
               status: "booking_pending",
               result_code: "submitting_booking",
-              result_message: `Submitting ${info.preference}.`,
+              result_message: `Submitting ${describePreference(info.preference)} for ${hostelName}.`,
               last_checked_at: new Date().toISOString(),
             }).catch(() => {});
           },

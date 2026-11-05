@@ -31,9 +31,9 @@ Run these five steps before booking day to make sure everything works:
 npm test
 ```
 
-**What it does:** Runs 17 tests against a fake local portal. No internet connection needed.
+**What it does:** Runs 26 tests against a fake local portal. No internet connection needed.
 
-**What success looks like:** All 17 tests pass. If any fail, something broke — do not continue to the real portal.
+**What success looks like:** All 26 tests pass. If any fail, something broke — do not continue to the real portal.
 
 ---
 
@@ -77,15 +77,25 @@ npm run portal:record -- --label accommodation
 
 ---
 
-### 5. Dry Run
+### 5. Choose Your Hostel
+
+```bash
+npm run portal:select
+```
+
+Or use the picker on the dashboard. Pick the boys' or girls' list, then the hostel; the price shown is the published SUG price. The choice is saved in `.portal/selection.json` and is the only hostel the runner will book. `npm run portal:select -- --gender female --hostel girls-bosso` saves it without any prompts.
+
+---
+
+### 6. Dry Run
 
 ```bash
 npm run portal:book -- --now
 ```
 
-**What it does:** Opens the accommodation page, finds the best matching room from your preferences, shows what it would book, then STOPS without clicking anything.
+**What it does:** Opens the accommodation page, looks for your saved hostel, shows what it would book, then STOPS without clicking anything.
 
-**What it proves:** The app can match your preferred room type on the real portal page.
+**What it proves:** The app can find your hostel on the real portal page — and that it ignores every row from the other gender's list.
 
 **Add `--headed` to watch it happen:**
 ```bash
@@ -114,7 +124,8 @@ npm run portal:book -- --at 2026-11-06T09:00:00 --live --headed --poll 500
 ### Optional Flags
 
 - `--window 15` — Keep trying for 15 minutes after opening time (default is 10 minutes)
-- `--rooms "Room of 2,Room of 4"` — Specify your preference order explicitly
+- `--gender male|female --hostel <id>` — Book a different hostel for this run only
+- `--rooms "Room of 2,Room of 4"` — Force a room order for a hostel that has more than one
 
 ### Example: Aggressive Race-Day Command
 

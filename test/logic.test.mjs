@@ -2,13 +2,25 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { backoffDelay, retry, waitUntil } from "../worker/portal/retry.mjs";
 import {
+  ANY_ROOM,
   chooseCandidate,
   classifyBookingResult,
   classifyPage,
+  crossesGender,
   extractAmount,
   matchesHostel,
   matchesRoom,
 } from "../worker/portal/matching.mjs";
+import { toCandidates } from "../worker/portal/inventory.mjs";
+import {
+  HOSTELS,
+  exclusiveHostelNames,
+  findHostel,
+  formatNaira,
+  hostelsFor,
+  resolveBookingTarget,
+  textNamesHostel,
+} from "../lib/hostels.mjs";
 
 test("room matching understands the portal's different wordings", () => {
   assert.equal(matchesRoom("Needs Assessment Hostel Room of 2 Available", "Room of 2"), true);
@@ -54,6 +66,99 @@ test("preference order falls back only when the first choice is unavailable", ()
   ];
   assert.equal(chooseCandidate(both, preferences).preference, "Room of 2");
   assert.equal(chooseCandidate([], preferences), null);
+});
+
+test("the catalogue matches the published SUG list", () => {
+  assert.equal(hostelsFor("male").length, 6);
+  assert.equal(hostelsFor("female").length, 7);
+  assert.deepEqual(hostelsFor("male").map((hostel) => hostel.price), [60_000, 50_000, 110_000, 130_000, 150_000, 180_000]);
+  assert.deepEqual(hostelsFor("female").map((hostel) => hostel.price), [50_000, 50_000, 60_000, 110_000, 130_000, 150_000, 180_000]);
+  assert.equal(findHostel("boys-needs-assessment-2").price, 180_000);
+  assert.deepEqual(findHostel("girls-needs-assessment-4").rooms, ["Room of 4"]);
+  assert.equal(new Set(HOSTELS.map((hostel) => hostel.id)).size, HOSTELS.length);
+  assert.equal(formatNaira(60_000), "\u20a660,000");
+  for (const hostel of HOSTELS) assert.ok(hostel.gender === "male" || hostel.gender === "female", hostel.id);
+});
+
+test("a boys' hostel can never be booked for a girls' choice", () => {
+  assert.throws(
+    () => resolveBookingTarget({ gender: "female", hostelId: "boys-bosso" }),
+    (error) => error.code === "hostel_gender_mismatch",
+  );
+  assert.throws(() => resolveBookingTarget({ gender: "male", hostelId: "girls-medical" }), /girls' hostel/i);
+  assert.throws(() => resolveBookingTarget({ gender: "male", hostelId: "not-a-hostel" }), (error) => error.code === "hostel_unknown");
+  assert.throws(() => resolveBookingTarget({ gender: "male" }), (error) => error.code === "hostel_required");
+  assert.throws(() => resolveBookingTarget({ gender: "other", hostelId: "boys-bosso" }), (error) => error.code === "gender_required");
+
+  const target = resolveBookingTarget({ gender: "female", hostelId: "girls-bosso" });
+  assert.equal(target.portalName, "Bosso Girls Hostel");
+  assert.deepEqual(target.rooms, []);
+});
+
+test("the gender guard only blocks hostels the other gender alone has", () => {
+  assert.ok(exclusiveHostelNames("male").includes("Old Girls Hostel"));
+  assert.ok(exclusiveHostelNames("male").includes("Bosso Girls Hostel"));
+  assert.ok(!exclusiveHostelNames("male").includes("Medical Hostel"));
+  assert.ok(!exclusiveHostelNames("male").includes("Needs Assessment Hostel"));
+  assert.ok(exclusiveHostelNames("female").includes("Block A & B"));
+  assert.ok(!exclusiveHostelNames("female").includes("Medical Hostel"));
+  assert.equal(crossesGender("Old Girls Hostel", "male"), true);
+  assert.equal(crossesGender("Bosso Girls Hostel", "male"), true);
+  assert.equal(crossesGender("Bosso Boys Hostel", "male"), false);
+});
+
+function scanOf(...texts) {
+  return {
+    rows: texts.map((text) => ({ text, tag: "tr", actions: [{ id: "a0", kind: "click", text: "Book now", href: null, name: null }] })),
+    selects: [],
+    forms: [],
+    iframeCount: 0,
+  };
+}
+
+test("any-room matching books only the chosen hostel", () => {
+  const mixed = scanOf(
+    "Bosso Boys Hostel Room of 4 Available Book now",
+    "Bosso Girls Hostel Room of 4 Available Book now",
+    "Old Girls Hostel Room of 4 Available Book now",
+  );
+  const forGirl = toCandidates(mixed, { hostel: "Bosso Girls Hostel", preferences: [], gender: "female" });
+  assert.equal(forGirl.length, 1);
+  assert.equal(forGirl[0].roomPreference, ANY_ROOM);
+  assert.match(forGirl[0].rowText, /Bosso Girls Hostel/);
+  assert.deepEqual(chooseCandidate(forGirl, []).preference, ANY_ROOM);
+
+  const forBoy = toCandidates(mixed, { hostel: "Bosso Boys Hostel", preferences: [], gender: "male" });
+  assert.equal(forBoy.length, 1);
+  assert.match(forBoy[0].rowText, /Bosso Boys Hostel/);
+
+  const unavailable = toCandidates(scanOf("Medical Hostel Room of 4 Available Book now"), {
+    hostel: "Bosso Girls Hostel", preferences: [], gender: "female",
+  });
+  assert.equal(unavailable.length, 0, "a different hostel must never be booked as a fallback");
+});
+
+test("the gender guard skips the other gender's rows even on a mixed page", () => {
+  const mixed = scanOf(
+    "Old Girls Hostel Room of 4 Available Book now",
+    "Block A & B Room of 4 Available Book now",
+  );
+  const candidates = toCandidates(mixed, { hostel: "Block A & B", hostelAliases: ["block a and b", "block a"], preferences: [], gender: "male" });
+  assert.equal(candidates.length, 1);
+  assert.match(candidates[0].rowText, /Block A & B/);
+
+  const wrongOnly = toCandidates(scanOf("Medical Hostel Room of 4 Available Book now"), {
+    hostel: "Medical Hostel", preferences: [], gender: "male",
+    hostelAliases: [],
+  });
+  assert.equal(wrongOnly.length, 1, "a shared hostel name is still bookable");
+});
+
+test("hostel names are matched strictly for any-room bookings", () => {
+  assert.equal(textNamesHostel("Block A & B \u00b7 Room of 4", "Block A & B"), true);
+  assert.equal(textNamesHostel("Block A and B hostel", "Block A & B", ["block a and b"]), true);
+  assert.equal(textNamesHostel("Block C hostel", "Block A & B", ["block a", "block b"]), false);
+  assert.equal(textNamesHostel("Old Girls' Hostel", "Old Girls Hostel", ["old girls"]), true);
 });
 
 test("fees amounts are parsed from the usual portal wording", () => {

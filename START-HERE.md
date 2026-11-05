@@ -85,7 +85,7 @@ Type this and press Enter:
 npm test
 ```
 
-**If you see:** "17 tests passed" with green checkmarks ✅
+**If you see:** "26 tests passed" with green checkmarks ✅
 → **SUCCESS! Continue to Step 7**
 
 **If you see:** Red errors ❌
@@ -122,7 +122,15 @@ PORTAL_HOSTEL=Needs Assessment Hostel
 
 ### Step 8: Test With Real Portal (5 minutes)
 
-**Test 1: Save Your Login**
+**Test 1: Choose Your Hostel**
+```
+npm run portal:select
+```
+- Type `b` for boys' hostels or `g` for girls' hostels
+- Type the number of the hostel you want (for example `2`)
+- Only hostels from the list you picked can ever be booked
+
+**Test 2: Save Your Login**
 ```
 npm run portal:login
 ```
@@ -131,7 +139,7 @@ npm run portal:login
 - Close browser
 - Should say "Session saved"
 
-**Test 2: Check Portal Navigation (CRITICAL TEST)**
+**Test 3: Check Portal Navigation (CRITICAL TEST)**
 ```
 npm run portal:fees
 ```
@@ -139,9 +147,9 @@ npm run portal:fees
 - **DOES NOT PAY ANYTHING** - just opens fees page and stops
 - Should show: `"status": "gateway_reached"`
 
-**If Test 2 works → The script CAN interact with FUTMINNA portal! ✅**
+**If Test 3 works → The script CAN interact with FUTMINNA portal! ✅**
 
-**Test 3: Capture Hostel Page**
+**Test 4: Capture Hostel Page**
 ```
 npm run portal:record -- --label accommodation
 ```
@@ -155,13 +163,15 @@ npm run portal:record -- --label accommodation
 ### Step 9: Practice Run (SAFE - Doesn't Book Anything)
 
 ```
-npm run portal:book -- --now --dry-run
+npm run portal:book -- --now
 ```
 
 This shows what it WOULD book without actually clicking anything.
 
-**If it says:** `"outcome": "would_book", "preference": "Room of 2"`
+**If it says:** `"outcome": "would_book"` and the log line names your hostel
 → **PERFECT! You're ready for race day!** ✅
+
+If it says `No hostel chosen yet`, run `npm run portal:select` first.
 
 ---
 

@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "verify": "node verify-setup.mjs",
     "portal:prepare": "node scripts/portal-session.mjs",
+    "portal:select": "node scripts/book.mjs select",
     "portal:login": "node scripts/book.mjs login",
     "portal:record": "node scripts/book.mjs record",
     "portal:discover": "node scripts/book.mjs discover",

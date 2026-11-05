@@ -1,4 +1,5 @@
-import { isActionLabel, matchesHostel, matchesRoom, normalize } from "./matching.mjs";
+import { ANY_ROOM, crossesGender, isActionLabel, matchesHostel, matchesRoom, normalize } from "./matching.mjs";
+import { textNamesHostel } from "../../lib/hostels.mjs";
 
 const ACTION_SELECTOR = 'button, a[href], input[type="button"], input[type="submit"], input[type="radio"], input[type="checkbox"], [role="button"]';
 const ROW_SELECTOR = 'tr, li, article, form, [role="row"], [class*="room" i], [class*="hostel" i], [class*="accommodation" i], [class*="card" i]';
@@ -102,11 +103,20 @@ export async function scanRows(page) {
   );
 }
 
-export function toCandidates(scan, { hostel, preferences }) {
+export function toCandidates(scan, { hostel, hostelAliases = [], preferences = [], gender = null }) {
   const candidates = [];
+  const order = preferences.length ? preferences : [ANY_ROOM];
+  const anyRoom = !preferences.length;
   for (const row of scan.rows) {
-    const preference = preferences.find((value) => matchesRoom(row.text, value));
+    // Never look at a row that names the other gender's hostel, even when the
+    // page mixes both lists together.
+    if (crossesGender(row.text, gender)) continue;
+    const preference = order.find((value) => value === ANY_ROOM || matchesRoom(row.text, value));
     if (!preference) continue;
+    const hostelMatched = matchesHostel(row.text, hostel);
+    // When the hostel is the only thing chosen, the row must name it. This is
+    // what stops "any room type" from clicking another hostel's Book button.
+    if (anyRoom && !textNamesHostel(row.text, hostel, hostelAliases)) continue;
     const action = row.actions.find((value) => isActionLabel(value.text)) ?? row.actions[0];
     if (!action) continue;
     const soldOut = /sold\s*out|no\s+(?:space|vacancy|vacancies)|fully\s+(?:booked|allocated)|rooms?\s+(?:are\s+)?full|unavailable/i.test(normalize(row.text));
@@ -115,7 +125,7 @@ export function toCandidates(scan, { hostel, preferences }) {
       action,
       rowText: row.text,
       available: !soldOut,
-      hostelMatched: matchesHostel(row.text, hostel),
+      hostelMatched,
       ambiguousHostel: false,
     });
   }
@@ -127,23 +137,26 @@ export function toCandidates(scan, { hostel, preferences }) {
  * and then submit the form. Only options that explicitly match the saved
  * preference are ever selected.
  */
-export function planSelectRoute(scan, { hostel, preferences }) {
+export function planSelectRoute(scan, { hostel, hostelAliases = [], preferences = [], gender = null }) {
+  const anyRoom = !preferences.length;
   for (const select of scan.selects) {
     const context = normalize(`${select.label} ${select.context} ${select.name ?? ""} ${select.id ?? ""}`);
     if (!/room|hostel|accommodation|bed|hall|residence/.test(context)) continue;
-    for (const preference of preferences) {
-      const option = select.options.find((value) => !value.disabled && matchesRoom(value.text, preference));
-      if (option) {
-        return {
-          selectIndex: select.index,
-          name: select.name,
-          id: select.id,
-          optionText: option.text,
-          optionValue: option.value,
-          preference,
-          hostelMatched: matchesHostel(context, hostel),
-        };
-      }
+    for (const option of select.options) {
+      if (option.disabled || crossesGender(option.text, gender)) continue;
+      const preference = anyRoom
+        ? (textNamesHostel(option.text, hostel, hostelAliases) ? ANY_ROOM : null)
+        : (preferences.find((value) => matchesRoom(option.text, value)) ?? null);
+      if (!preference) continue;
+      return {
+        selectIndex: select.index,
+        name: select.name,
+        id: select.id,
+        optionText: option.text,
+        optionValue: option.value,
+        preference,
+        hostelMatched: textNamesHostel(option.text, hostel, hostelAliases) || matchesHostel(context, hostel),
+      };
     }
   }
   return null;

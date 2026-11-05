@@ -33,7 +33,43 @@ function dashboardPage(name) {
     <p>2026/2027 academic session.</p>`);
 }
 
+function row({ hostel, room, available }) {
+  return `<tr><td>${hostel}</td><td>${room}</td><td>${available ? "Available" : "Sold out"}</td><td>
+    ${available ? `<form method="post" action="/std/book.php">
+      <input type="hidden" name="hostel" value="${hostel}">
+      <input type="hidden" name="room" value="${room}">
+      <button type="submit">Book now</button>
+    </form>` : ""}
+  </td></tr>`;
+}
+
+const HEADER = "<tr><th>Hostel</th><th>Room type</th><th>Status</th><th>Action</th></tr>";
+
+function mixedHostelPage(mode) {
+  const rows = mode === "mixedGirlsSoldOut"
+    ? [
+        row({ hostel: "Bosso Boys Hostel", room: "Room of 4", available: true }),
+        row({ hostel: "Bosso Girls Hostel", room: "Room of 4", available: false }),
+      ]
+    : mode === "mixedBoysBlockSoldOut"
+      ? [
+          row({ hostel: "Bosso Boys Hostel", room: "Room of 4", available: true }),
+          row({ hostel: "Block A & B", room: "Room of 4", available: false }),
+        ]
+      : [
+          row({ hostel: "Bosso Boys Hostel", room: "Room of 4", available: true }),
+          row({ hostel: "Bosso Girls Hostel", room: "Room of 4", available: true }),
+          row({ hostel: "Medical Hostel", room: "Room of 4", available: true }),
+          row({ hostel: "Old Girls Hostel", room: "Room of 4", available: true }),
+        ];
+  return layout("Hostel Accommodation", `<h2>Hostel Accommodation</h2>
+    <table>${HEADER}${rows.join("")}</table>`);
+}
+
 function hostelPage(mode) {
+  if (mode === "mixed" || mode === "mixedGirlsSoldOut" || mode === "mixedBoysBlockSoldOut") {
+    return mixedHostelPage(mode);
+  }
   if (mode === "notopen") {
     return layout("Hostel Accommodation", `<h2>Hostel Accommodation</h2>
       <p>Hostel booking has not yet opened for the 2026/2027 session.</p>`);
@@ -115,6 +151,7 @@ export async function startMockPortal({
     password,
     signedIn: new Set(),
     bookings: [],
+    hostelBookings: [],
     payRequests: 0,
     hostelRequests: 0,
     requests: [],
@@ -183,6 +220,7 @@ export async function startMockPortal({
       if (!requireAuth()) return;
       const body = await readBody(request);
       const room = body.get("room") ?? "unknown";
+      const hostel = body.get("hostel") ?? "Needs Assessment Hostel";
       if (state.mode === "failbook") {
         return send(200, layout("Booking failed", "<h2>Booking failed</h2><p>An error occurred. Please try again.</p>"));
       }
@@ -190,8 +228,9 @@ export async function startMockPortal({
         return send(200, layout("Already booked", `<p>You have already been allocated ${state.bookings[0]}.</p>`));
       }
       state.bookings.push(room);
+      state.hostelBookings.push({ hostel, room });
       return send(200, layout("Booking successful", `<h2>Booking successful</h2>
-        <p>You have been allocated ${room} in Needs Assessment Hostel.</p>
+        <p>You have been allocated ${room} in ${hostel}.</p>
         <p>Reference: NAH-2026-0042</p>`));
     }
 

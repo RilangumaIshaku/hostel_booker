@@ -18,6 +18,16 @@ import { bookRoom, discoverPortal, feesCheck } from "../worker/portal/booker.mjs
 import { describePage, redact, scanRows } from "../worker/portal/inventory.mjs";
 import { mergeSpecPage, readSpec, sectionUrl, SPEC_DIR, specPath } from "../worker/portal/spec.mjs";
 import { isTransient } from "../worker/portal/retry.mjs";
+import {
+  describePreference,
+  findHostel,
+  findHostelByAnyName,
+  formatNaira,
+  genderLabel,
+  hostelsFor,
+  isGender,
+  resolveBookingTarget,
+} from "../lib/hostels.mjs";
 
 function loadLocalEnv() {
   for (const file of [".env.local", ".env"]) {
@@ -63,9 +73,52 @@ const hasFlag = (name) => takeFlag(name, false) === true;
 const lagosTime = () => new Date().toLocaleTimeString("en-NG", { timeZone: "Africa/Lagos", hour12: false });
 const log = (message) => console.log(`${lagosTime()} ${message}`);
 
+const SELECTION_FILE = join(SPEC_DIR, "selection.json");
+
+function readSelection() {
+  try {
+    if (!existsSync(SELECTION_FILE)) return null;
+    const parsed = JSON.parse(readFileSync(SELECTION_FILE, "utf8"));
+    if (!parsed?.hostelId || !isGender(parsed.gender)) return null;
+    return { gender: parsed.gender, hostelId: String(parsed.hostelId) };
+  } catch {
+    return null;
+  }
+}
+
+function writeSelection(choice) {
+  mkdirSync(SPEC_DIR, { recursive: true });
+  writeFileSync(SELECTION_FILE, `${JSON.stringify({ gender: choice.gender, hostelId: choice.hostelId, savedAt: new Date().toISOString() }, null, 2)}\n`, { mode: 0o600 });
+}
+
+/** Turn --gender/--hostel (or the saved selection) into a validated target. */
+function resolveTarget(gender, hostel) {
+  if (!hostel) return null;
+  const byId = findHostel(hostel);
+  if (byId) return resolveBookingTarget({ gender: isGender(gender) ? gender : byId.gender, hostelId: byId.id });
+  const byName = findHostelByAnyName(hostel, isGender(gender) ? gender : undefined);
+  if (byName) return resolveBookingTarget({ gender: isGender(gender) ? gender : byName.gender, hostelId: byName.id });
+  const error = new Error(`"${hostel}" is not a hostel in the 2026/2027 list. Use the id from npm run portal:select (for example boys-medical or girls-medical).`);
+  error.code = "hostel_unknown";
+  throw error;
+}
+
+function printCatalogue() {
+  log("Choose the hostel once, then the runner remembers it:");
+  console.log("\n  npm run portal:select            (interactive, saves .portal/selection.json)\n");
+  for (const gender of ["male", "female"]) {
+    console.log(`  ${genderLabel(gender)}s`);
+    for (const hostel of hostelsFor(gender)) {
+      console.log(`    ${hostel.id.padEnd(26)} ${formatNaira(hostel.price).padStart(9)}  ${hostel.name}${hostel.detail ? ` \u00b7 ${hostel.detail}` : ""}`);
+    }
+    console.log("");
+  }
+}
+
 function usage() {
   console.log(`FUTMINNA portal runner
 
+  npm run portal:select                      Choose your hostel (boys or girls list)
   npm run portal:login                       Sign in once in a real browser
   npm run portal:record -- --label accommodation
                                              Capture the real hostel page after you open it
@@ -83,7 +136,11 @@ Options:
   --profile <dir>   Browser profile directory
   --portal <url>    Override the portal URL
   --url <url>       Override the accommodation page URL
+  --hostel <id>     Hostel id from npm run portal:select (overrides the saved choice)
+  --gender <male|female>
+                    Which list the hostel comes from; mismatches are refused
   --rooms "Room of 2,Room of 4"
+                    Override the room order (default comes from the hostel)
   --poll <ms>       Poll interval during the rush (default 800)
   --window <min>    Keep trying this long after the start time (default 10)
   --label <name>    Capture label for record (default accommodation)
@@ -99,6 +156,14 @@ function pressEnter(prompt) {
   }));
 }
 
+function ask(prompt) {
+  const terminal = createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolve) => terminal.question(prompt, (answer) => {
+    terminal.close();
+    resolve(String(answer).trim());
+  }));
+}
+
 function parseStart(value) {
   if (!value || value === true) return null;
   const text = String(value).trim();
@@ -111,6 +176,13 @@ function parseStart(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function takeText(name, fallback = "") {
+  const value = takeFlag(name, undefined);
+  if (value === undefined) return fallback;
+  return typeof value === "string" && value !== "true" ? value.trim() : "";
+}
+
+const savedSelection = readSelection();
 const options = {
   portalUrl: String(takeFlag("portal", process.env.PORTAL_URL) || ""),
   profileDir: String(takeFlag("profile", defaultProfileDir())),
@@ -119,12 +191,12 @@ const options = {
   showHelp: hasFlag("help"),
   now: hasFlag("now"),
 };
+const genderFlag = takeText("gender", process.env.PORTAL_GENDER || savedSelection?.gender || "");
+const hostelFlag = takeText("hostel", process.env.PORTAL_HOSTEL || savedSelection?.hostelId || "");
+const roomsFlag = takeText("rooms", process.env.PORTAL_ROOMS || "");
 const spec = readSpec();
 const portalUrl = options.portalUrl || spec.portalUrl || DEFAULT_PORTAL_URL;
 const portalOrigin = new URL(portalUrl).origin;
-const hostel = String(takeFlag("hostel", process.env.PORTAL_HOSTEL || "Needs Assessment Hostel"));
-const preferences = String(takeFlag("rooms", process.env.PORTAL_ROOMS || "Room of 2,Room of 4"))
-  .split(",").map((value) => value.trim()).filter(Boolean);
 const credentials = {
   username: process.env.PORTAL_USERNAME || "",
   password: process.env.PORTAL_PASSWORD || "",
@@ -134,14 +206,15 @@ function saveResult(result, extra = {}) {
   const dir = join(SPEC_DIR, "results");
   mkdirSync(dir, { recursive: true });
   const file = join(dir, `result-${new Date().toISOString().replace(/[:.]/g, "-")}.json`);
-  writeFileSync(file, `${JSON.stringify({ at: new Date().toISOString(), portalUrl, hostel, preferences, ...extra, result }, null, 2)}\n`, { mode: 0o600 });
+  writeFileSync(file, `${JSON.stringify({ at: new Date().toISOString(), portalUrl, ...extra, result }, null, 2)}\n`, { mode: 0o600 });
   return file;
 }
 
-function summarize(result) {
+function summarize(result, target) {
+  const where = target?.name ?? "the chosen hostel";
   switch (result.outcome) {
     case "confirmed": return "BOOKING CONFIRMED by the portal. Check the portal receipt before paying.";
-    case "would_book": return `Dry run: would book ${result.preference}. Nothing was clicked.`;
+    case "would_book": return `Dry run: would book ${describePreference(result.preference)} in ${where}. Nothing was clicked.`;
     case "not_available": return `No matching room yet (${result.reason}).`;
     case "rejected": return "The portal rejected the booking attempt.";
     case "requires_user_confirmation": return "The portal asked for payment confirmation. Complete it yourself; nothing was charged.";
@@ -273,7 +346,69 @@ function randomDelay(base) {
   return Math.round(base * (0.85 + Math.random() * 0.4));
 }
 
+async function runSelect() {
+  let target;
+  if (hostelFlag) {
+    try {
+      target = resolveTarget(genderFlag, hostelFlag);
+    } catch (error) {
+      log(error.message);
+      process.exitCode = 2;
+      return;
+    }
+    writeSelection(target);
+    log(`Saved ${target.name}${target.roomNote ? ` (${target.roomNote})` : ""} · ${genderLabel(target.gender)} · ${formatNaira(target.price)}`);
+    log(`The runner will book ${target.portalName} from now on. Change it on the dashboard or by running this again.`);
+    return;
+  }
+
+  for (const gender of ["male", "female"]) {
+    console.log(`\n${genderLabel(gender)}s`);
+    hostelsFor(gender).forEach((hostel, index) => {
+      console.log(`  ${String(index + 1).padStart(2)}. ${hostel.name}${hostel.detail ? ` · ${hostel.detail}` : ""}  ${formatNaira(hostel.price)}`);
+    });
+  }
+  console.log("");
+  if (!process.stdin.isTTY) {
+    log("Not an interactive terminal. Use: npm run portal:select -- --gender male --hostel boys-bosso");
+    process.exitCode = 2;
+    return;
+  }
+  const answer = (await ask("Boys' or girls' hostels? [b/g]: ")).toLowerCase();
+  const gender = answer.startsWith("g") ? "female" : "male";
+  const list = hostelsFor(gender);
+  list.forEach((hostel, index) => {
+    console.log(`  ${index + 1}. ${hostel.name}${hostel.detail ? ` · ${hostel.detail}` : ""}  ${formatNaira(hostel.price)}`);
+  });
+  const index = Number(await ask("Number: "));
+  const picked = list[index - 1];
+  if (!picked) {
+    log("That number is not in the list. Nothing was saved.");
+    process.exitCode = 2;
+    return;
+  }
+  writeSelection({ gender, hostelId: picked.id });
+  log(`Saved ${picked.name}${picked.detail ? ` (${picked.detail})` : ""} · ${genderLabel(gender)} · ${formatNaira(picked.price)}`);
+  log(`Saved to ${SELECTION_FILE}. Run npm run portal:book -- --now for a dry run.`);
+}
+
 async function runBook() {
+  let target;
+  try {
+    target = resolveTarget(genderFlag, hostelFlag);
+  } catch (error) {
+    log(error.message);
+    process.exitCode = 2;
+    return;
+  }
+  if (!target) {
+    printCatalogue();
+    log("No hostel chosen yet, so nothing was booked. Run npm run portal:select first.");
+    process.exitCode = 2;
+    return;
+  }
+  const hostel = target.portalName;
+  const preferences = roomsFlag ? roomsFlag.split(",").map((value) => value.trim()).filter(Boolean) : target.rooms;
   const start = options.now ? Date.now() : parseStart(takeFlag("at", process.env.PORTAL_START));
   if (!start) {
     usage();
@@ -290,7 +425,8 @@ async function runBook() {
     return;
   }
 
-  log(`${options.live ? "LIVE" : "DRY RUN"} · hostel: ${hostel} · order: ${preferences.join(" -> ")}`);
+  log(`${options.live ? "LIVE" : "DRY RUN"} · ${target.name} · ${genderLabel(target.gender)} · ${formatNaira(target.price)}`);
+  log(`Room order: ${preferences.length ? preferences.join(" -> ") : `any bed space in ${target.name}`}`);
   log(`Start: ${new Date(start).toLocaleString("en-NG", { timeZone: "Africa/Lagos" })} (Lagos) · keep trying until ${new Date(until).toLocaleString("en-NG", { timeZone: "Africa/Lagos" })}`);
 
   const session = await openSession({ profileDir: options.profileDir, headless: !options.headed });
@@ -345,13 +481,15 @@ async function runBook() {
         const result = await bookRoom({
           page: sectionPage,
           hostel,
+          hostelAliases: target.aliases,
           preferences,
+          gender: target.gender,
           deadline: until,
           dryRun: !options.live,
         });
         finalResult = result;
         consecutiveErrors = 0;
-        log(`Attempt ${attempts}: ${result.outcome}${result.preference ? ` (${result.preference})` : ""}${result.reason ? ` · ${result.reason}` : ""}`);
+        log(`Attempt ${attempts}: ${result.outcome}${result.preference ? ` (${describePreference(result.preference)})` : ""}${result.reason ? ` · ${result.reason}` : ""}`);
 
         if (result.submitted || ["confirmed", "rejected", "requires_user_confirmation", "security_challenge", "session_expired", "would_book"].includes(result.outcome)) {
           break;
@@ -378,10 +516,17 @@ async function runBook() {
       process.exitCode = 1;
       return;
     }
-    const file = saveResult(finalResult, { mode: options.live ? "live_booking" : "dry_run", attempts });
+    const file = saveResult(finalResult, {
+      mode: options.live ? "live_booking" : "dry_run",
+      attempts,
+      gender: target.gender,
+      hostelId: target.hostelId,
+      hostel: target.name,
+      preferences,
+    });
     console.log(JSON.stringify(finalResult, null, 2));
     log(`Saved ${file}`);
-    log(summarize(finalResult));
+    log(summarize(finalResult, target));
     if (["confirmed", "would_book"].includes(finalResult.outcome)) process.exitCode = 0;
     else if (finalResult.submitted) process.exitCode = 2;
     else process.exitCode = 1;
@@ -396,6 +541,7 @@ async function main() {
     return;
   }
   switch (command) {
+    case "select": return runSelect();
     case "login": return runLogin();
     case "record": return runRecord();
     case "discover": return runDiscover();

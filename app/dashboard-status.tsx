@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { findHostel } from "@/lib/hostels.mjs";
+import { useHostelChoice } from "./hostel-choice";
 
 type Job = { id: string; run_mode: string; status: string; starts_at: string; result_message: string | null };
 type Readiness = { connected: boolean; canSchedule: boolean; sessionCheckEnabled: boolean; automationEnabled: boolean; jobs: Job[] };
@@ -11,6 +13,8 @@ export default function DashboardStatus() {
   const [message, setMessage] = useState("Setup has not been checked yet.");
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
+  const choice = useHostelChoice();
+  const chosenHostel = choice ? findHostel(choice.hostelId) : null;
 
   async function refresh() {
     setLoading(true);
@@ -37,6 +41,11 @@ export default function DashboardStatus() {
   async function schedule(runMode: "booking" | "session_check") {
     setBusy(true);
     setMessage("");
+    if (runMode === "booking" && !choice) {
+      setMessage("Choose the hostel you want to book before scheduling.");
+      setBusy(false);
+      return;
+    }
     try {
       const response = await fetch("/api/booking-jobs", {
         method: "POST",
@@ -46,6 +55,7 @@ export default function DashboardStatus() {
           startsAt: runMode === "booking"
             ? "2026-11-06T09:00:00+01:00"
             : new Date(Date.now() + 60_000).toISOString(),
+          ...(choice ? { gender: choice.gender, hostelId: choice.hostelId } : {}),
         }),
       });
       const result = await response.json();
@@ -55,7 +65,7 @@ export default function DashboardStatus() {
       }
       setMessage(runMode === "session_check"
         ? "Sign-in-only dry run scheduled. It will not select or submit a room."
-        : "Booking job scheduled. This is not a booking confirmation.");
+        : `Booking attempt scheduled for ${chosenHostel?.name ?? "your hostel"}. This is not a booking confirmation.`);
       await refresh();
     } catch {
       setMessage("Could not reach the booking service. Try again.");
@@ -71,6 +81,12 @@ export default function DashboardStatus() {
         <div><p className="text-xs font-bold uppercase tracking-[0.12em] text-emerald-800">Live setup check</p><h2 className="mt-1.5 text-lg font-semibold tracking-tight">Will the booker be ready?</h2></div>
         <button onClick={() => void refresh()} disabled={loading || busy} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 disabled:opacity-50">{loading ? "Checking…" : "Refresh status"}</button>
       </div>
+      <p className="mt-3 inline-flex flex-wrap items-center gap-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+        <span className="font-semibold text-slate-800">Hostel:</span>
+        {chosenHostel
+          ? <span>{chosenHostel.name}{chosenHostel.detail ? ` \u00b7 ${chosenHostel.detail}` : ""}{" \u00b7 "}{chosenHostel.gender === "male" ? "boys" : "girls"}</span>
+          : <span className="text-amber-800">not chosen yet — pick one in Choose your hostel</span>}
+      </p>
       {loading && <p className="mt-4 text-sm text-slate-500">Checking your account and booking service…</p>}
       {!loading && message && <div className="mt-4 rounded-xl bg-amber-50 p-4 text-sm leading-6 text-amber-900"><p>{message}</p>{message.startsWith("Sign in") && <Link href="/login" className="mt-2 inline-block font-semibold underline">Sign in or create your account</Link>}</div>}
       {!loading && readiness && <>
@@ -79,8 +95,13 @@ export default function DashboardStatus() {
         {!readiness.automationEnabled && <p className="mt-4 rounded-xl bg-slate-50 p-4 text-sm leading-6 text-slate-600">The cloud worker is not armed yet. Run the free school-fees check on your laptop first — it signs in, opens the fees page and reaches the payment handoff without paying. Then enable <code className="rounded bg-slate-200 px-1">BOOKING_AUTOMATION_ENABLED</code> on the worker.</p>}
         {latestJob && <p className="mt-4 rounded-xl bg-slate-50 p-4 text-sm leading-6 text-slate-700">Latest {latestJob.run_mode === "session_check" ? "sign-in check" : "booking job"}: <strong>{latestJob.status.replaceAll("_", " ")}</strong> · {new Date(latestJob.starts_at).toLocaleString("en-NG", { dateStyle: "medium", timeStyle: "short", timeZone: "Africa/Lagos" })}{latestJob.result_message ? ` · ${latestJob.result_message}` : ""}</p>}
         {readiness.connected && <button onClick={() => void schedule("session_check")} disabled={!readiness.sessionCheckEnabled || busy} className="mt-5 w-full rounded-xl border border-emerald-900 px-4 py-3 text-sm font-semibold text-emerald-900 disabled:cursor-not-allowed disabled:border-slate-300 disabled:text-slate-400 sm:mr-3 sm:w-auto">{busy ? "Scheduling…" : "Run sign-in-only dry run"}</button>}
-        <button onClick={() => void schedule("booking")} disabled={!readiness.canSchedule || busy} className="mt-3 w-full rounded-xl bg-emerald-900 px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300 sm:w-auto">{busy ? "Scheduling…" : "Schedule my booking attempt"}</button>
-        <p className="mt-3 text-xs leading-5 text-slate-400">The room order is Needs Assessment Hostel: Room of 2, then Room of 4. A job status never means a booking succeeded; only the portal confirmation does.</p>
+        <button onClick={() => void schedule("booking")} disabled={!readiness.canSchedule || !choice || busy} className="mt-3 w-full rounded-xl bg-emerald-900 px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-300 sm:w-auto">{busy ? "Scheduling…" : "Schedule my booking attempt"}</button>
+        <p className="mt-3 text-xs leading-5 text-slate-400">
+          {chosenHostel
+            ? `This job books ${chosenHostel.name}${chosenHostel.detail ? ` (${chosenHostel.detail})` : ""} from the ${chosenHostel.gender === "male" ? "boys’" : "girls’"} list only. `
+            : "Choose a hostel first. "}
+          A job status never means a booking succeeded; only the portal confirmation does.
+        </p>
       </>}
     </article>
   );

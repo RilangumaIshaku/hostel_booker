@@ -35,11 +35,13 @@ These tests run 17 scenarios against a fake local portal. No internet connection
 You'll see output like this:
 
 ```
-✔ booking engine selects first preference when available
-✔ booking engine falls back to Room of 4 when Room of 2 is sold out
-✔ booking engine submits nothing when sold out
+✔ books the first preference when it is available
+✔ falls back to the second preference when the first is sold out
+✔ never submits when nothing is available
+✔ books the chosen girls' hostel from a page that lists both genders
+✔ a girls' choice never falls back into a boys' hostel
 ...
-✔ 17 tests passed
+✔ 26 tests passed
 ```
 
 **Important:** If any test fails, something broke in the code. DO NOT proceed to the real portal. Share the failure output so it can be fixed first.
@@ -152,7 +154,7 @@ If the capture is empty or shows no rooms, the accommodation section might not b
 
 ## Step 4: Dry Run
 
-Before booking day, do a dry run to confirm the app can match your preferred room on the real page:
+Choose the hostel first — on the dashboard picker or with `npm run portal:select` — then dry run to confirm the app can find it on the real page:
 
 ```bash
 npm run portal:book -- --now
@@ -160,8 +162,8 @@ npm run portal:book -- --now
 
 **What happens:**
 1. The app opens the accommodation page
-2. It scans for rooms that match your saved preferences (default: "Room of 2", then "Room of 4")
-3. It finds the best available match
+2. It scans for rows that name your chosen hostel and skips any row from the other gender's list
+3. It finds the best available match (the room type only matters for Needs Assessment)
 4. It shows you what it would book
 5. **IT STOPS** — no clicking, no submission
 
