@@ -9,6 +9,12 @@ test("a portal that cannot be reached counts as a connection failure", () => {
   assert.equal(isConnectionFailure(Object.assign(new Error("The portal returned 503."), { code: "portal_busy" })), true);
 });
 
+test("an overloaded portal that never finishes signing in is worth waiting for", () => {
+  assert.equal(isConnectionFailure(Object.assign(new Error("The portal did not finish signing in within 60 seconds."), { code: "portal_login_timeout" })), true);
+  // A real credential rejection must still stop the run, never be retried in a loop.
+  assert.equal(isConnectionFailure(Object.assign(new Error("The portal rejected that username and password."), { code: "portal_login_rejected" })), false);
+});
+
 test("a page we can read but not act on is not a connection failure", () => {
   const soldOut = Object.assign(new Error("Every matching row is sold out."), { code: "portal_rows_sold_out" });
   assert.equal(isConnectionFailure(soldOut), false);

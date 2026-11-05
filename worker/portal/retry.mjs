@@ -52,16 +52,23 @@ const CONNECTION_PATTERN = new RegExp(
     "socket hang up",
     "Navigation timeout",
     "Timeout \\d+ms exceeded",
+    "did not finish signing in",
     "Target closed",
     "page crashed",
   ].join("|"),
   "i",
 );
 
+// An overloaded portal can serve the login form and then never finish the
+// sign-in. That is the portal being unwell, not the password being wrong, so
+// watch mode waits it out instead of stopping. A real rejection uses
+// portal_login_rejected, which is deliberately not in this list.
+const PORTAL_NOT_READY = new Set(["portal_busy", "portal_login_timeout"]);
+
 export function isConnectionFailure(error) {
   if (!error) return false;
   if (error.code === "deadline_exceeded") return false;
-  if (error.code === "portal_busy") return true;
+  if (PORTAL_NOT_READY.has(error.code)) return true;
   return CONNECTION_PATTERN.test(String(error.message ?? error));
 }
 
