@@ -39,6 +39,38 @@ export function isTransient(error) {
   return TRANSIENT_PATTERN.test(String(error.message ?? error));
 }
 
+// "The portal is down" is different from "the page loaded but the rooms are
+// unreadable". Watch mode only keeps waiting for the first kind.
+const CONNECTION_PATTERN = new RegExp(
+  [
+    "net::ERR_(CONNECTION|NAME|TIMED_OUT|NETWORK|ADDRESS|INTERNET|EMPTY_RESPONSE|TUNNEL)",
+    "ECONNRESET",
+    "ECONNREFUSED",
+    "ETIMEDOUT",
+    "ENOTFOUND",
+    "EAI_AGAIN",
+    "socket hang up",
+    "Navigation timeout",
+    "Timeout \\d+ms exceeded",
+    "Target closed",
+    "page crashed",
+  ].join("|"),
+  "i",
+);
+
+export function isConnectionFailure(error) {
+  if (!error) return false;
+  if (error.code === "deadline_exceeded") return false;
+  if (error.code === "portal_busy") return true;
+  return CONNECTION_PATTERN.test(String(error.message ?? error));
+}
+
+/** 30s, 60s, 120s, 240s, then every 5 minutes while the portal stays down. */
+export function watchBackoffMs(previous, { startMs = 30_000, maxMs = 300_000 } = {}) {
+  const next = previous > 0 ? previous * 2 : startMs;
+  return Math.max(startMs, Math.min(maxMs, Math.round(next)));
+}
+
 /**
  * Exponential backoff with jitter. Jitter matters when several students in the
  * same hostel share one overloaded network: fixed retry intervals create spikes.

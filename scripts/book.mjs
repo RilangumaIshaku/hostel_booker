@@ -17,7 +17,7 @@ import {
 import { bookRoom, discoverPortal, feesCheck } from "../worker/portal/booker.mjs";
 import { describePage, redact, scanRows } from "../worker/portal/inventory.mjs";
 import { mergeSpecPage, readSpec, sectionUrl, SPEC_DIR, specPath } from "../worker/portal/spec.mjs";
-import { isTransient } from "../worker/portal/retry.mjs";
+import { isConnectionFailure, isTransient, watchBackoffMs } from "../worker/portal/retry.mjs";
 import {
   describePreference,
   findHostel,
@@ -127,6 +127,8 @@ function usage() {
   npm run portal:book -- --now --dry-run     Show what would be booked, click nothing
   npm run portal:book -- --at 2026-11-06T09:00:00 --live
                                              Timed booking rush
+  npm run portal:watch -- --hostel boys-medical
+                                             Live run that survives a dead portal
 
 Options:
   --at <time>       ISO time with offset, or a Lagos HH:MM
@@ -143,6 +145,10 @@ Options:
                     Override the room order (default comes from the hostel)
   --poll <ms>       Poll interval during the rush (default 800)
   --window <min>    Keep trying this long after the start time (default 10)
+  --watch           Keep waiting with backoff when the portal is unreachable
+                    instead of stopping after a few failed attempts
+  --watch-minutes <n>
+                    How long watch mode stays alive (default 240)
   --label <name>    Capture label for record (default accommodation)
 `);
 }
@@ -162,6 +168,14 @@ function ask(prompt) {
     terminal.close();
     resolve(String(answer).trim());
   }));
+}
+
+function sameOrigin(url, origin) {
+  try {
+    return new URL(url).origin === origin;
+  } catch {
+    return false;
+  }
 }
 
 function parseStart(value) {
@@ -190,6 +204,7 @@ const options = {
   live: hasFlag("live"),
   showHelp: hasFlag("help"),
   now: hasFlag("now"),
+  watch: hasFlag("watch"),
 };
 const genderFlag = takeText("gender", process.env.PORTAL_GENDER || savedSelection?.gender || "");
 const hostelFlag = takeText("hostel", process.env.PORTAL_HOSTEL || savedSelection?.hostelId || "");
@@ -409,7 +424,10 @@ async function runBook() {
   }
   const hostel = target.portalName;
   const preferences = roomsFlag ? roomsFlag.split(",").map((value) => value.trim()).filter(Boolean) : target.rooms;
-  const start = options.now ? Date.now() : parseStart(takeFlag("at", process.env.PORTAL_START));
+  const atFlag = takeFlag("at", process.env.PORTAL_START);
+  // Watch mode has no meaningful start time of its own: it books as soon as the
+  // portal answers, so it starts now unless a time was given explicitly.
+  const start = options.now || (options.watch && !atFlag) ? Date.now() : parseStart(atFlag);
   if (!start) {
     usage();
     process.exitCode = 2;
@@ -418,7 +436,8 @@ async function runBook() {
   const pollMs = Math.max(250, Number(takeFlag("poll", "800")));
   const windowMinutes = Number(takeFlag("window", "10"));
   const warmupMs = Number(takeFlag("warmup", "180")) * 1_000;
-  const until = start + windowMinutes * 60_000;
+  const watchMinutes = Math.max(0.1, Number(takeFlag("watch-minutes", "240")));
+  const until = start + (options.watch ? watchMinutes : windowMinutes) * 60_000;
   if (until < Date.now()) {
     log("That booking window has already closed. Use --now to run a check.");
     process.exitCode = 2;
@@ -428,14 +447,22 @@ async function runBook() {
   log(`${options.live ? "LIVE" : "DRY RUN"} · ${target.name} · ${genderLabel(target.gender)} · ${formatNaira(target.price)}`);
   log(`Room order: ${preferences.length ? preferences.join(" -> ") : `any bed space in ${target.name}`}`);
   log(`Start: ${new Date(start).toLocaleString("en-NG", { timeZone: "Africa/Lagos" })} (Lagos) · keep trying until ${new Date(until).toLocaleString("en-NG", { timeZone: "Africa/Lagos" })}`);
+  if (options.watch) log(`Watch mode: a portal that cannot be reached is retried with backoff for up to ${watchMinutes} minutes. Close this window to stop.`);
 
   const session = await openSession({ profileDir: options.profileDir, headless: !options.headed });
   const mainPage = session.page;
   let current = mainPage;
   let accommodationUrl = String(takeFlag("url", sectionUrl(spec, "accommodation")) || "");
+  // A capture made against a different host (a mock, or an old portal address)
+  // would send the signed-in session somewhere it cannot work, so ignore it.
+  if (accommodationUrl && !sameOrigin(accommodationUrl, portalOrigin)) {
+    log(`Ignoring the saved accommodation page ${accommodationUrl}: it is not on ${portalOrigin}. It will be rediscovered.`);
+    accommodationUrl = "";
+  }
   let finalResult = null;
   let attempts = 0;
   let consecutiveErrors = 0;
+  let unreachableBackoffMs = 0;
 
   try {
     await waitUntil(Math.max(Date.now(), start - warmupMs));
@@ -445,7 +472,7 @@ async function runBook() {
       log(`Session ready (${method}).`);
     } catch (error) {
       log(`Could not pre-warm the session: ${error.message}`);
-      if (!options.headed) throw error;
+      if (!options.headed && !options.watch) throw error;
     }
 
     await waitUntil(Math.max(Date.now(), start));
@@ -489,6 +516,7 @@ async function runBook() {
         });
         finalResult = result;
         consecutiveErrors = 0;
+        unreachableBackoffMs = 0;
         log(`Attempt ${attempts}: ${result.outcome}${result.preference ? ` (${describePreference(result.preference)})` : ""}${result.reason ? ` · ${result.reason}` : ""}`);
 
         if (result.submitted || ["confirmed", "rejected", "requires_user_confirmation", "security_challenge", "session_expired", "would_book"].includes(result.outcome)) {
@@ -501,6 +529,18 @@ async function runBook() {
         if (error.code === "portal_section_not_found" || error.code === "portal_layout_changed") accommodationUrl = "";
         if (error.code === "portal_security_challenge") break;
         if (error.code === "portal_login_required" || error.code === "portal_login_rejected") break;
+        // A portal that is simply down is worth waiting out; a page we can read
+        // but not act on is not, so only connection failures use watch backoff.
+        if (options.watch && isConnectionFailure(error)) {
+          const remaining = until - Date.now();
+          if (remaining <= 0) break;
+          unreachableBackoffMs = watchBackoffMs(unreachableBackoffMs);
+          const pause = Math.min(unreachableBackoffMs, remaining);
+          log(`The portal is unreachable from this network. Waiting ${Math.round(pause / 1_000)}s, then trying again (${attempts} attempts so far).`);
+          await sleep(pause);
+          consecutiveErrors = 0;
+          continue;
+        }
         if (!isTransient(error) && !["portal_section_not_found", "portal_layout_changed", "portal_login_required"].includes(error.code) && consecutiveErrors >= 3) break;
         if (consecutiveErrors >= 8) {
           log("Stopping after 8 consecutive failures. The portal may be overloaded or blocking this network.");
@@ -512,7 +552,9 @@ async function runBook() {
     }
 
     if (!finalResult) {
-      log("No booking attempt completed before the window closed.");
+      log(options.watch
+        ? `The watch period ended after ${attempts} attempts without a completed booking. Nothing was booked.`
+        : "No booking attempt completed before the window closed.");
       process.exitCode = 1;
       return;
     }

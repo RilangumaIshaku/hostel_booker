@@ -122,7 +122,19 @@ npm run portal:book -- --now
 npm run portal:book -- --at 2026-11-06T09:00:00 --live
 ```
 
-Options: `--headed` to watch the browser, `--poll 500` for a tighter loop, `--window 15` to keep trying for 15 minutes, `--profile <dir>`, and `--gender male|female --hostel <id>` to override the saved choice for one run. `--rooms "Room of 2,Room of 4"` still forces a room order, but the chosen hostel decides it by default. A hostel from the other gender’s list is refused before the browser opens.
+Options: `--headed` to watch the browser, `--poll 500` for a tighter loop, `--window 15` to keep trying for 15 minutes, `--profile <dir>`, and `--gender male|female --hostel <id>` to override the saved choice for one run.
+
+### When the portal will not answer
+
+A normal run gives up after a few failed attempts, which is wrong on a day when `eportal.futminna.edu.ng` refuses connections for hours. Watch mode keeps the run alive:
+
+```bash
+npm run portal:watch -- --hostel boys-medical --headed
+```
+
+It signs in when it can, and while the portal is unreachable it waits 30s, then 60s, then 120s, capped at 5 minutes, for `--watch-minutes` (default 240). The first readable room that matches is submitted once, exactly as in a timed run, and the run ends on a confirmation, a rejection, a CAPTCHA, or the end of the watch period. A page it can read but not act on is still not retried forever: after 3 such failures it stops, because that means the layout is wrong, not the network.
+
+Restart it after editing the code, and close the window to stop it. A saved accommodation page from another host (a mock, or an old portal address) is ignored rather than followed, so a stale capture cannot send the signed-in session elsewhere. `--rooms "Room of 2,Room of 4"` still forces a room order, but the chosen hostel decides it by default. A hostel from the other gender’s list is refused before the browser opens.
 
 For a fully unattended run, put `PORTAL_USERNAME` and `PORTAL_PASSWORD` in `.env.local` (already gitignored) so the runner can sign in again if the portal session expires. The CLI never prints them. Do not put these on a shared server.
 
@@ -193,6 +205,7 @@ If a worker dies mid-job, startup recovery marks the stale job `needs_attention`
 | `npm run portal:record -- --label accommodation` | Capture the real hostel page |
 | `npm run portal:book -- --now` | Dry run: show the match, click nothing |
 | `npm run portal:book -- --at 2026-11-06T09:00:00 --live` | Timed booking rush |
+| `npm run portal:watch -- --hostel <id>` | Live run that survives a portal that refuses connections |
 | `npm run worker:start` | Cloud worker (needs Supabase env) |
 | `npm run portal:prepare` | Older single-student local sign-in prototype |
 

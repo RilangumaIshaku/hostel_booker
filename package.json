@@ -15,6 +15,7 @@
     "portal:discover": "node scripts/book.mjs discover",
     "portal:fees": "node scripts/book.mjs fees",
     "portal:book": "node scripts/book.mjs book",
+    "portal:watch": "node scripts/book.mjs book --now --live --watch",
     "portal:keygen": "node scripts/generate-portal-key.mjs",
     "worker:start": "node worker/worker.mjs",
     "test": "node --test test/*.test.mjs"
